@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400" role="img" aria-label="Cafe Mocha">
+  <rect width="600" height="400" rx="28" fill="#FAF3E7"/>
+  <circle cx="520" cy="70" r="150" fill="#7B4B2A" opacity="0.10"/>
+  <circle cx="90" cy="340" r="110" fill="#7B4B2A" opacity="0.08"/>
+  <path d="M60,126 Q180,108.4 300,122.8 T540,114.8" fill="none" stroke="#7B4B2A" stroke-width="16" stroke-linecap="round" opacity="0.55"/>
+  <circle cx="300" cy="176" r="104" fill="#FFFFFF" stroke="#7B4B2A" stroke-width="10"/>
+  <text x="300" y="212" font-family="'Segoe Script','Brush Script MT',cursive" font-size="104" fill="#7B4B2A" text-anchor="middle">C</text>
+  <text x="300" y="300" font-family="Georgia,'Times New Roman',serif" font-size="34" font-weight="700" fill="#1B2A4A" text-anchor="middle">Cafe Mocha</text>
+  <text x="300" y="330" font-family="Arial,sans-serif" font-size="15" letter-spacing="4" fill="#6B5D4F" text-anchor="middle">SWEET GONZ BAKESHOP CAFÉ</text>
+</svg>

@@ -1,0 +1,64 @@
+# ============================================================================
+# Sweet Gonz Kiosk - Caddy configuration (EXAMPLE for the local pilot)
+#
+# Prerequisites (documented in docs/DEPLOYMENT.md):
+#   1. Reserve a static private IP for the kiosk tablet's Wi-Fi / the pilot
+#      LAN (e.g. HOST_IP). Caddy must be installed on the same machine
+#      that runs the Node server (or reach it on localhost).
+#   2. Install Caddy (external prerequisite, NOT bundled with this project).
+#   3. Replace KIOSK_HOST below with the kiosk hostname or private IP used on
+#      the LAN, e.g.  https://HOST_IP  or  https://kiosk.lan
+#   4. Copy this file to the Caddy config location (Caddyfile) and start
+#      Caddy:  caddy start  (or  caddy run )
+#   5. Trust Caddy's root certificate on the tablet (see DEPLOYMENT.md).
+#
+# Behavior:
+#   - Terminates HTTPS with Caddy's INTERNAL CA (pki ca local) - no public
+#     certificate, no public exposure.
+#   - Redirects all HTTP to HTTPS.
+#   - Reverse-proxies to the Node server on localhost only.
+#   - Node is never exposed directly to the LAN (bind 127.0.0.1).
+# ============================================================================
+
+{
+  # Internal CA used for pilot certificates. The root certificate is written
+  # to <caddy-data>/pki/authorities/local/root.crt on first run.
+  pki {
+    ca local
+  }
+}
+
+# --- HTTP -> HTTPS redirect ------------------------------------------------
+http://KIOSK_HOST {
+  redir https://{host}{uri} permanent
+}
+
+# --- HTTPS kiosk + admin ----------------------------------------------------
+https://KIOSK_HOST {
+  # Internal CA certificate (auto-issued by Caddy; no public CA involved).
+  tls internal
+
+  encode zstd gzip
+
+  # Reverse proxy to the Node API + static SPA server on localhost.
+  reverse_proxy 127.0.0.1:4000 {
+    # Pass the real client IP so rate limiting and audit logs see the tablet.
+    header_up X-Forwarded-For {remote_host}
+    header_up X-Forwarded-Proto {scheme}
+  }
+
+  # Sensible local-pilot timeouts.
+  request_timeout 10s
+
+  log {
+    output file /var/log/caddy/kiosk-access.log
+    format json
+  }
+}
+
+# ============================================================================
+# Firewall (documented in DEPLOYMENT.md):
+#   - Allow inbound TCP 80/443 ONLY from the private LAN (e.g. 192.168.1.0/24).
+#   - Do NOT enable port forwarding on the router.
+#   - Do NOT expose this machine to the public internet.
+# ============================================================================

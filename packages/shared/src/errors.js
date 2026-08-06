@@ -1,0 +1,32 @@
+/**
+ * Stable API error codes. The UI localizes by code; the server always returns
+ * the stable English developer message alongside the code.
+ */
+export const ERROR_CODES = [
+  'VALIDATION_ERROR',
+  'BAD_REQUEST',
+  'EMPTY_CART',
+  'PRODUCT_NOT_FOUND',
+  'PRODUCT_UNAVAILABLE',
+  'ADDON_NOT_FOUND',
+  'ADDON_INCOMPATIBLE',
+  'OPTION_NOT_FOUND',
+  'REQUIRED_OPTIONS',
+  'QUANTITY_OUT_OF_RANGE',
+  'IDEMPOTENCY_KEY_MISSING',
+  'ORDER_NOT_FOUND',
+  'INVALID_RECEIPT_TOKEN',
+  'UNAUTHORIZED',
+  'INVALID_CREDENTIALS',
+  'RATE_LIMITED',
+  'SESSION_EXPIRED',
+  'CSRF_INVALID',
+  'STALE_VERSION',
+  'INVALID_TRANSITION',
+  'INVALID_PAYMENT_STATE',
+  'PAYMENT_NOT_CONFIRMED',
+  'NOT_FOUND',
+  'INTERNAL_ERROR',
+];
+
+export const ERROR_CODES_SET = new Set(ERROR_CODES);

@@ -1,0 +1,10 @@
+node_modules
+dist
+coverage
+data
+backups
+test-results
+playwright-report
+*.db
+*.db-*
+package-lock.json

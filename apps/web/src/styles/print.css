@@ -1,0 +1,74 @@
+/* ============================================================
+   Print stylesheet: prints ONLY the receipt area
+   ============================================================ */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .receipt-print-area,
+  .receipt-print-area * {
+    visibility: visible;
+  }
+
+  .receipt-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: 320px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    font-size: 12px;
+  }
+
+  .receipt-print-area .receipt-header {
+    text-align: center;
+    margin-bottom: 6px;
+  }
+
+  .receipt-print-area .receipt-header .receipt-shop {
+    font-size: 15px;
+    font-weight: 800;
+    color: #000;
+  }
+
+  .receipt-print-area .receipt-header .receipt-title {
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .receipt-print-area .row {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .receipt-print-area .divider {
+    border-top: 1px dashed #000;
+    margin: 4px 0;
+  }
+
+  .receipt-print-area .demo-warning-print {
+    border: 2px solid #000;
+    padding: 4px;
+    text-align: center;
+    font-weight: 700;
+    margin: 6px 0;
+  }
+
+  .receipt-print-area .thankyou {
+    text-align: center;
+    font-weight: 700;
+    margin-top: 8px;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}

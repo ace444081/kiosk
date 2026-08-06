@@ -1,0 +1,48 @@
+{
+  "name": "sweet-gonz-kiosk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tablet-Based Self-Service Ordering Kiosk for Sweet Gonz Bakeshop Cafe",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "concurrently": "^10.0.4",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^17.9.0",
+    "prettier": "^3.9.6",
+    "sharp": "^0.35.3"
+  },
+  "scripts": {
+    "dev": "concurrently -n web,server -c cyan,yellow \"npm:dev:web\" \"npm:dev:server\"",
+    "dev:web": "npm run dev -w apps/web",
+    "dev:server": "npm run dev -w apps/server",
+    "build": "npm run build -w apps/web && npm run build -w apps/server",
+    "start": "node --env-file-if-exists=.env scripts/start.js",
+    "lint": "eslint .",
+    "format:check": "prettier --check .",
+    "format": "prettier --write .",
+    "test": "npm run test -w apps/server && npm run test -w apps/web && npm run test -w packages/shared",
+    "test:unit": "npm run test:unit -w apps/server && npm run test:unit -w apps/web && npm run test:unit -w packages/shared",
+    "test:integration": "npm run test:integration -w apps/server",
+    "test:e2e": "npm run test:e2e -w apps/web",
+    "db:migrate": "node --env-file-if-exists=.env scripts/db-migrate.js",
+    "db:seed": "node --env-file-if-exists=.env scripts/db-seed.js",
+    "db:reset": "node --env-file-if-exists=.env scripts/db-reset.js",
+    "admin:create": "node --env-file-if-exists=.env scripts/admin-create.js",
+    "staff:create": "node --env-file-if-exists=.env scripts/admin-create.js",
+    "backup": "node --env-file-if-exists=.env scripts/backup.js",
+    "restore": "node --env-file-if-exists=.env scripts/restore.js",
+    "healthcheck": "node --env-file-if-exists=.env scripts/healthcheck.js",
+    "assets:generate": "node scripts/generate-placeholders.mjs",
+    "benchmark": "node --env-file-if-exists=.env scripts/benchmark.mjs"
+  }
+}
