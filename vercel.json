@@ -8,6 +8,30 @@
     {
       "source": "/api/:path*",
       "destination": "https://sweetgonz-api.onrender.com/api/:path*"
+    },
+    {
+      "source": "/kiosk",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/kiosk/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/staff/:path*",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/order-board",
+      "destination": "/index.html"
     }
   ],
   "headers": [

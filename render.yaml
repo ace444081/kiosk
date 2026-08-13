@@ -5,9 +5,9 @@ services:
     region: singapore
     plan: free
     buildCommand: npm ci --ignore-scripts
-    # Render Free does not provide the paid-only preDeployCommand lifecycle.
-    # The migration runner is idempotent and executes before the API on boot.
-    startCommand: npm run db:migrate && node apps/server/src/index.js
+    # Production migrations are run from a trusted local machine before the
+    # service is deployed. Render receives only the runtime database role.
+    startCommand: node apps/server/src/index.js
     healthCheckPath: /api/v1/health
     autoDeployTrigger: commit
     envVars:
@@ -18,8 +18,6 @@ services:
       - key: DATABASE_PROVIDER
         value: postgres
       - key: DATABASE_URL
-        sync: false
-      - key: MIGRATION_DATABASE_URL
         sync: false
       - key: PGSSL
         value: true

@@ -134,15 +134,19 @@ target already contains data unless `--replace` is explicitly supplied.
 
 ### 2. Render
 
+Before creating the service, run the PostgreSQL migrations and SQLite import
+from a trusted local machine using the migration-owner connection. Do not store
+that owner credential on Render.
+
 Create the `sweetgonz-api` web service from `render.yaml`. Set these secrets in
 Render, never in Git:
 
 - `DATABASE_URL`
-- `MIGRATION_DATABASE_URL` (migration-owner connection kept separate from the runtime role)
 - `SESSION_SECRET` (at least 32 random characters)
 
-The service binds to Render's `PORT`, runs the idempotent migration command at
-boot, and serves API routes only. Its health check is `/api/v1/health`.
+`DATABASE_URL` must use the least-privilege runtime role. The service binds to
+Render's `PORT` and serves API routes only. Its health check is
+`/api/v1/health`.
 
 ### 3. Vercel
 
