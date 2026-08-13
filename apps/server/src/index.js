@@ -3,7 +3,6 @@ import { loadEnv } from './config/env.js';
 import { openDb } from './config/db.js';
 import { openPostgres } from './db/postgres.js';
 import { runMigrations } from './db/migrate.js';
-import { runPostgresMigrations } from './db/postgres-migrate.js';
 import { createLogger } from './utils/logger.js';
 import { createApp } from './app.js';
 
@@ -15,8 +14,11 @@ async function main() {
   let lockPath = null;
 
   try {
-    if (isPostgres) await runPostgresMigrations(db);
-    else {
+    if (isPostgres) {
+      // Hosted PostgreSQL migrations run as an explicit owner-only deployment
+      // step. Runtime startup must remain compatible with kiosk_runtime.
+      await db.one('SELECT 1 FROM app.schema_migrations LIMIT 1');
+    } else {
       runMigrations(db);
       lockPath = `${env.dbPath}.lock`;
       fs.writeFileSync(lockPath, String(process.pid));
