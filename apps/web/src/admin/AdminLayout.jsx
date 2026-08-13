@@ -150,6 +150,9 @@ export function AdminLayout() {
           <NavLink to="/staff" className={({ isActive }) => (isActive ? 'active' : '')}>
             Stations
           </NavLink>
+          <NavLink to="/admin/standby" className={({ isActive }) => (isActive ? 'active' : '')}>
+            Cloud standby
+          </NavLink>
         </nav>
         <main className="admin-content">
           <Outlet />

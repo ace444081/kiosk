@@ -1,141 +1,135 @@
-# Deployment — Local HTTPS Pilot (Android + iPadOS)
+# Deployment
 
-## 1. Topology
+## Deployment modes
 
-```mermaid
-flowchart LR
-    T[Tablet PWA] -->|https://kiosk.lan| C[Caddy :443/:80<br/>internal CA]
-    C -->|127.0.0.1:4000| N[Node server]
-    N --> DB[(SQLite)]
+| Mode            | Frontend | API     | Database            | Purpose                               |
+| --------------- | -------- | ------- | ------------------- | ------------------------------------- |
+| SQLite rollback | Vite     | Express | local SQLite        | offline recovery and regression tests |
+| Local primary   | Vite     | Express | Supabase PostgreSQL | normal demo operation                 |
+| Cloud fallback  | Vercel   | Render  | Supabase PostgreSQL | device failover                       |
+
+The local primary and cloud fallback share data. This requires internet access
+to Supabase even when the browser is using the local machine.
+
+## Supabase setup
+
+1. Create a free project named `sweetgonz-db`.
+2. Use the Singapore region when available.
+3. Apply the files under `apps/server/src/db/postgres-migrations` with the
+   migration-owner connection, or run `npm run db:migrate` with
+   `DATABASE_PROVIDER=postgres`.
+4. Create a runtime database role with only the required access to the private
+   `app` schema. Apply [deploy/supabase-runtime-grants.sql](../deploy/supabase-runtime-grants.sql)
+   after replacing its placeholder role name. Keep its password in Render and
+   local `.env` only.
+5. Do not expose the `app` schema through the Supabase Data API. This project
+   connects with `pg` from Express instead of using a browser Supabase client.
+
+### Import current SQLite data
+
+Stop the local server first, then set a private `.env`:
+
+```dotenv
+DATABASE_PROVIDER=postgres
+DATABASE_URL=<private-supabase-connection-string>
+PGSSL=true
+DEPLOYMENT_ID=local-primary
 ```
 
-- Node binds `127.0.0.1` only — never exposed to the LAN directly.
-- Caddy terminates HTTPS and reverse-proxies to Node.
-- The live SQLite file must live on a **local disk**, never a network share.
-
-## 2. Prerequisites
-
-- Node.js LTS + the project installed and built (`npm install`,
-  `npm run db:migrate`, `npm run db:seed`, `npm run admin:create`,
-  `npm run build`).
-- **Caddy** installed on the shop PC (external prerequisite, not bundled).
-  Download from https://caddyserver.com/download (Windows amd64) and add
-  `caddy.exe` to PATH.
-- A **reserved/static private IP** for the shop PC on the shop Wi-Fi
-  (DHCP reservation in the router, e.g. `192.168.1.50`), and a fixed
-  hostname if desired (e.g. `kiosk.lan` via the router's DNS or the
-  tablet's hosts file).
-
-## 3. Configure and start Caddy
-
-1. Copy the example:
-   ```powershell
-   Copy-Item deploy\Caddyfile.example Caddyfile
-   ```
-2. Edit `Caddyfile` and replace **KIOSK_HOST** with the kiosk hostname or
-   private IP, e.g. `https://kiosk.lan` or `https://192.168.1.50`.
-3. Start Caddy:
-   ```powershell
-   caddy start
-   ```
-   - Caddy auto-issues a certificate from its **internal CA**
-     (`pki ca local`) on first run — no public certificate, no public
-     exposure.
-   - The internal root certificate is written to Caddy's data directory:
-     `<caddy-data>\pki\authorities\local\root.crt`
-     (Windows default: `%APPDATA%\Caddy\pki\authorities\local\root.crt`).
-4. Keep Node running (`npm start` in the project root, or a service).
-
-## 4. Locate/export the Caddy root certificate
+Run:
 
 ```powershell
-# Default Windows location after first `caddy start`:
-Get-ChildItem "$env:APPDATA\Caddy\pki\authorities\local"
-# Export a copy for the tablet (e.g. root.crt) — this file is then
-# transferred to the tablet (email/cloud/USB — private network only).
+npm run db:import:postgres
 ```
 
-## 5. Trust the certificate on Android
+The command checks SQLite integrity, creates a backup in the ignored
+`backups/` directory, imports catalog/accounts/orders/items/audits, excludes
+sessions, and reconciles row counts and completed totals. It refuses a populated
+target unless `--replace` is explicitly added.
 
-1. Copy `root.crt` to the tablet (e.g. Downloads).
-2. Settings → Security & privacy → **More security settings /
-   Encryption & credentials / Install a certificate** → **CA certificate**.
-3. Select `root.crt`; name it e.g. "Sweet Gonz Kiosk CA".
-4. Confirm the warning (this is a private pilot CA, not a public one).
+## Render API
 
-> Android may label the certificate "not trusted for the internet" — that
-> is expected for a private internal CA; the kiosk hostname/IP is the only
-> thing it covers.
+1. Create the service from the repository's `render.yaml`.
+2. Name the service `sweetgonz-api`.
+3. Set `DATABASE_URL`, `MIGRATION_DATABASE_URL`, and a random `SESSION_SECRET`
+   in the Render secret store. `DATABASE_URL` should use the least-privilege
+   runtime role; `MIGRATION_DATABASE_URL` should use the separate migration
+   owner.
+4. Keep `COOKIE_SECURE=true`, `TRUST_PROXY=true`, `SERVE_WEB=false`, and
+   `DEPLOYMENT_ID=cloud-fallback`.
+5. Set `PUBLIC_ORIGINS` to the final Vercel production URL.
+6. Confirm `/api/v1/health` is the health check and that the service reaches
+   the Supabase database before inviting station devices.
 
-## 6. Trust the certificate on iPadOS
+The free plan does not provide Render's paid-only pre-deploy lifecycle, so the
+Blueprint runs the idempotent `npm run db:migrate` command in its start command
+before starting Express.
 
-1. Copy `root.crt` to the iPad (AirDrop/email).
-2. Open it in **Files**, tap Install when the profile prompt appears
-   (Settings → Profile Downloaded).
-3. Settings → General → **About → Certificate Trust Settings** → enable
-   full trust for "Sweet Gonz Kiosk CA".
+Render's free service can sleep after inactivity. This is why the hosted
+frontend includes `/admin/standby`, which performs a lightweight health check
+once per minute when left open on a spare device.
 
-## 7. Android kiosk setup
+## Vercel frontend
 
-1. Open the kiosk URL (`https://kiosk.lan/kiosk`) in Chrome.
-2. Menu → **Add to Home screen / Install app** (PWA install).
-3. **Lock to landscape**: enable auto-rotate off + the PWA runs landscape
-   (manifest requests landscape orientation).
-4. **App/screen pinning** (supervised use, NOT managed lock-task mode —
-   this project does not implement enterprise device management):
-   - Settings → Security → **Screen pinning**: enable it; require PIN to
-     unpin (set a PIN in lock-screen settings first).
-   - Open the kiosk PWA, then Overview → tap the app icon → **Pin**.
-5. **Disable sleep**: Settings → Display → Screen timeout → 30 minutes
-   (or "never" while supervised).
-6. **Disable autofill/password saving**:
-   - Settings → Passwords & accounts → turn off autofill/password saving.
-   - Chrome: Settings → Password Manager → off.
+1. Create a project named `sweetgonz` from the repository root.
+2. Keep the root directory at the repository root so workspaces install
+   correctly.
+3. Use the settings in `vercel.json`.
+4. Assign `sweetgonz.vercel.app` if available. Use
+   `sweetgonz-kiosk.vercel.app` if Vercel has already claimed the shorter name.
+5. If Render assigned a hostname suffix, update the external rewrite destination
+   in `vercel.json` before the production deployment.
 
-## 8. iPadOS kiosk setup
+The Vercel frontend has no database environment variables. The rewrite keeps
+the browser on one origin and forwards `/api/*` to Render.
 
-1. Install and trust the CA profile (see §6).
-2. Open the kiosk URL in **Safari** → Share → **Add to Home Screen**.
-3. The PWA opens standalone, landscape (manifest orientation).
-4. **Guided Access** (supervised single-app mode):
-   - Settings → Accessibility → **Guided Access**: enable; set a
-     **private passcode** (Settings → Guided Access → Passcode settings).
-   - Open the kiosk PWA, triple-click the side/top button → **Start
-     Guided Access**; triple-click again and enter the passcode to end.
-5. **Disable unnecessary hardware controls** inside Guided Access:
-   - Options → turn off Sleep/Wake, Volume buttons, Touch (keep Touch on
-     for ordering).
-6. **Display auto-lock**: Settings → Display & Brightness → Auto-Lock →
-   15 minutes or Never (supervised).
+## Local LAN access
 
-## 9. Firewall (private network only)
+Keep the API on the host machine and expose only Vite to the private LAN:
 
-- Allow inbound **TCP 80 and 443** only from the private LAN, e.g.:
-  ```powershell
-  New-NetFirewallRule -DisplayName "Kiosk HTTPS" -Direction Inbound `
-    -Protocol TCP -LocalPort 443 -RemoteAddress 192.168.1.0/24 -Action Allow
-  New-NetFirewallRule -DisplayName "Kiosk HTTP redirect" -Direction Inbound `
-    -Protocol TCP -LocalPort 80 -RemoteAddress 192.168.1.0/24 -Action Allow
-  ```
-- **Do NOT** enable port forwarding on the router.
-- **Do NOT** expose the shop PC to the public internet.
-- Node port 4000 stays bound to 127.0.0.1 (no firewall rule needed).
+```powershell
+# API terminal
+npm run dev:server
 
-## 10. After the pilot — remove the certificate
+# Vite terminal
+npm run dev -w apps/web -- --host 0.0.0.0
+```
 
-- **Android**: Settings → Security → Encryption & credentials → Trusted
-  credentials → User tab → delete "Sweet Gonz Kiosk CA".
-- **iPadOS**: Settings → General → VPN & Device Management → remove the
-  profile; then Certificate Trust Settings → disable trust.
-- Remove the Caddy internal CA data if the machine is decommissioned:
-  delete the `pki` folder under Caddy's data directory.
-- Revoke nothing publicly — the CA never left the private network.
+Open `http://<host-lan-address>:5173/kiosk` on tablets and phones connected to
+the same private network. Allow inbound TCP 5173 on the private Windows
+firewall profile. Do not expose port 4000 and do not enable router port
+forwarding.
 
-## 11. First-run verification checklist
+For an HTTPS-installed PWA, use the existing Caddy example and local CA
+instructions. Caddy is optional for the local HTTP demo.
 
-- [ ] `https://kiosk.lan/kiosk` loads with a valid (private CA) padlock.
-- [ ] HTTP redirects to HTTPS.
-- [ ] Admin console works over HTTPS; session cookie is Secure.
-- [ ] Kiosk PWA installs; offline shell loads; checkout disabled offline.
-- [ ] Tablet locked in landscape; pinning/Guided Access active.
-- [ ] Firewall rules limited to the private LAN; no port forwarding.
+## Cutover checklist
+
+- [ ] SQLite backup exists and opens successfully.
+- [ ] PostgreSQL migrations and grants are applied.
+- [ ] Full-data import reconciliation passed.
+- [ ] At least one account for each required role exists.
+- [ ] Render health is green and logs contain no database connection errors.
+- [ ] Vercel route and `/api` rewrite return 200 responses.
+- [ ] Local and hosted logins work with fresh sessions.
+- [ ] Kiosk-to-cashier-to-kitchen-to-serving workflow passes.
+- [ ] SOA export and audit events include the expected orders.
+- [ ] Desktop, tablet, and phone routes have no hidden actions or horizontal
+      overflow.
+
+## Failover checklist
+
+1. Pause new orders on the local URL.
+2. Confirm `/admin/standby` reports `API ready`.
+3. Move every station device to the matching Vercel route.
+4. Sign in again if the browser has no hosted session cookie.
+5. Confirm the latest order queue from Supabase before continuing.
+6. Keep one active mutation environment until the local server is repaired.
+7. Export the SOA and inspect deployment IDs after the session.
+
+## Rollback
+
+The source SQLite file and verified backup are not deleted by the cutover. To
+return to the rollback path, stop the Postgres-mode server, restore the verified
+SQLite backup with the existing restore tool, set `DATABASE_PROVIDER=sqlite`,
+and run the regression suite before reopening the local URL.

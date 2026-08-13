@@ -58,7 +58,7 @@ https://KIOSK_HOST {
 
 # ============================================================================
 # Firewall (documented in DEPLOYMENT.md):
-#   - Allow inbound TCP 80/443 ONLY from the private LAN (e.g. 192.168.1.0/24).
+#   - Allow inbound TCP 80/443 ONLY from the private LAN (e.g. <private-lan-cidr>).
 #   - Do NOT enable port forwarding on the router.
 #   - Do NOT expose this machine to the public internet.
 # ============================================================================

@@ -1,194 +1,99 @@
 # Architecture
 
-## 1. System overview
+## Runtime topology
 
 ```mermaid
 flowchart LR
-    subgraph Tablet["10-inch kiosk tablet (Android / iPadOS)"]
-        K[PWA kiosk UI<br/>React + Vite + i18next]
-    end
-
-    subgraph ShopPC["Shop PC (local network)"]
-        A[Admin console<br/>React SPA, same build]
-        C[Caddy<br/>HTTPS + reverse proxy<br/>internal CA]
-        N[Node/Express API<br/>127.0.0.1:4000]
-        DB[(SQLite<br/>WAL mode)]
-    end
-
-    K -->|HTTPS, private LAN| C
-    A -->|HTTPS, private LAN| C
-    C --> N
-    N --> DB
+  subgraph Local[Preferred local demo]
+    LAN[Tablet / phone / laptop] --> VITE[Vite React SPA]
+    VITE --> API1[Express API]
+  end
+  subgraph Hosted[Cloud fallback]
+    BROWSER[Device browser] --> VERCEL[Vercel SPA]
+    VERCEL -->|same-origin /api rewrite| API2[Render Express API]
+  end
+  API1 --> DB[(Supabase PostgreSQL)]
+  API2 --> DB
 ```
 
-- The browser apps are the same Vite build (customer kiosk + admin console).
-- In development the Vite dev server proxies `/api` to the Node server;
-  in production Caddy terminates HTTPS and proxies to Node on localhost.
-- Node binds `127.0.0.1` only; it is never exposed to the LAN directly.
+Local and hosted Express instances use the same PostgreSQL database. Only one
+environment should be considered active for station mutations at a time; the
+cloud path is a supervised fallback, not an active-active cluster.
 
-## 2. Monorepo layout
+## Repository layout
 
-```
-apps/web        React 18 + Vite 5 SPA/PWA (kiosk + admin), e2e tests
-apps/server     Express 4 API, better-sqlite3, domain services, tests
-packages/shared Zod schemas, constants, error codes, money, seed menu
-scripts         CLI tooling (migrate, seed, reset, admin, backup, restore,
-                healthcheck, benchmark, placeholder generation)
-deploy          Caddyfile.example
-docs            Documentation
-data            Live SQLite DB (gitignored)
-backups         Timestamped backups (gitignored)
+```text
+apps/web                  React 18 + Vite SPA/PWA
+apps/server               Express API and domain workflow
+apps/server/src/db        SQLite rollback and PostgreSQL migrations/providers
+apps/server/src/postgres  PostgreSQL repositories and order service
+packages/shared           Shared schemas, money, constants, and seed data
+scripts                   Local setup, import, backup, health, and account tools
+deploy                    Local Caddy example
+docs                      Operations, API, database, and test documentation
 ```
 
-## 3. Server architecture
+## Server boundaries
+
+The API is arranged as:
 
 ```mermaid
 flowchart TD
-    HTTP[HTTP requests] --> MW[Middleware chain<br/>Helmet - request id - pino-http<br/>json limit - sessions - rate limits]
-    MW --> R1[Public routes<br/>/api/v1]
-    MW --> R2[Admin routes<br/>/api/v1/admin]
-    R1 --> OS[OrderService]
-    R2 --> OS
-    R2 --> AS[AdminAuthService]
-    OS --> OR[OrderRepository]
-    OS --> CR[CatalogRepository]
-    AS --> AR[AdminRepository]
-    R1 --> CR
-    OS --> EB[EventBus]
-    EB --> SSE[SSE /api/v1/admin/events]
-    OR --> DB[(SQLite)]
-    CR --> DB
-    AR --> DB
-    AU[AuditRepository] --> DB
-    OS --> AU
-    AS --> AU
+  HTTP[HTTP] --> SEC[Helmet, request ID, rate limit, origin check]
+  SEC --> AUTH[Session + CSRF + role resolution]
+  AUTH --> ROUTES[Public, admin, and staff routes]
+  ROUTES --> SERVICE[Order service and state machine]
+  SERVICE --> REPOS[Catalog, order, account, audit repositories]
+  REPOS --> DB[(PostgreSQL app schema)]
+  SERVICE --> SSE[In-process refresh SSE + polling fallback]
 ```
 
-### 3.1 Request flow (order creation)
+The SQLite repositories and migrations remain available for rollback and the
+existing local test suite. When `DATABASE_PROVIDER=postgres`, the app selects
+the asynchronous PostgreSQL repositories, transaction wrapper, migrations,
+and session store.
 
-1. Route parses + validates the body with Zod (`createOrderSchema`).
-2. `Idempotency-Key` header is validated (8–128 chars).
-3. Existing key → return the original order (200, `duplicate: true`).
-4. Otherwise an **IMMEDIATE transaction**:
-   - loads current products/add-ons/options from the DB,
-   - validates availability, add-on compatibility, required options,
-     quantity limits (client prices ignored),
-   - allocates `SG-YYYYMMDD-NNN` (Asia/Manila business date + max
-     daily_sequence + 1),
-   - inserts the order + item snapshots + add-on/option snapshots,
-     storing only `sha256(receiptToken)`.
-5. After commit: audit row + `OrderCreated` event on the EventBus.
-6. Response: 201 with order, totals, receipt token.
+## Data integrity
 
-### 3.2 Idempotency and concurrency
+- Product prices and customization compatibility are loaded server-side.
+- Order items store historical product/add-on/option snapshots.
+- Amounts are integer centavos.
+- `daily_order_sequences` allocates order numbers atomically.
+- Status and payment mutations use the expected `version` in the update
+  predicate, preventing stale station devices from overwriting newer state.
+- Foreign keys, check constraints, unique indexes, and report indexes are
+  applied in the private `app` schema.
+- Audit events record actor, role, request ID, timestamp, and deployment ID.
 
-- Unique constraints: `order_number`, `(business_date, daily_sequence)`,
-  `idempotency_key` (all verified by integration tests).
-- The immediate transaction prevents two concurrent checkouts from
-  allocating the same sequence (verified with 5×3 concurrent inserts).
-- Admin mutations carry `version`; mismatches return 409 with the newest
-  state (optimistic concurrency).
+## Request and event behavior
 
-### 3.3 Events
+The Vercel rewrite preserves a single browser origin, so cookie sessions and
+relative EventSource URLs continue to work without broad CORS. The Render API
+returns sanitized public-board payloads and never exposes the database
+connection string or privileged Supabase credentials.
 
-- In-process `EventBus` with a bounded backlog (200) feeds SSE clients.
-- SSE route replays the backlog on connect, then streams live events with
-  15 s heartbeats; the admin UI falls back to 5 s polling on errors.
+SSE is an optimization for refresh signals. Clients refetch the authoritative
+queue or summary and fall back to five-second polling. This makes the system
+safe across the local/cloud switch even though the two processes do not share an
+in-memory event bus.
 
-## 4. Web architecture
+## Performance choices
 
-### 4.1 Kiosk
+- PostgreSQL pool size is bounded by `DATABASE_POOL_MAX`.
+- Database statements have a timeout.
+- Order detail loads items, modifiers, and options in batch queries.
+- Catalog cache and fixed-count menu loading avoid query counts proportional to
+  the number of products.
+- Queue results are paginated and ordered oldest-first.
 
-- `CartProvider` context holds the cart; persists to `sessionStorage`
-  (`sgkiosk.cart.v1`); merges identical configurations; recomputes line
-  totals from per-unit totals (base + add-ons + options).
-- Order submission stores an idempotency key in `sessionStorage`
-  (`sgkiosk.idempotency.v1`); network retries reuse it; duplicates show the
-  original order.
-- Idle timer: 105 s warn / 15 s grace / 120 s reset; suppressed while a
-  submission is in flight.
-- `useServerStatus` polls `/api/v1/health` every 10 s; offline state
-  preserves the cart and disables checkout.
-- i18next with `en`/`fil`; English is the per-session default.
+## Security choices
 
-### 4.2 Admin
+- Supabase is backend-only; no `service_role` key or database URL is shipped to
+  the browser.
+- The `app` schema is private and its default public grants are revoked.
+- Hosted cookies require HTTPS and trusted proxy configuration.
+- CSRF, role authorization, origin allowlisting, rate limiting, CSP, and
+  request IDs remain enabled.
+- Receipt tokens are hash-only lookup secrets.
 
-- `AdminLayout` guards `/admin/*` via `GET /admin/session`; CSRF token held
-  in memory only; language preference in `localStorage`.
-- `useAdminLive` subscribes to SSE with 5 s polling fallback for summary +
-  order lists.
-- Order detail performs status/payment mutations with the order `version`;
-  409 responses refresh the displayed state with the newest order.
-
-## 5. State machines
-
-```mermaid
-stateDiagram-v2
-    [*] --> placed: order created
-    placed --> preparing
-    placed --> cancelled
-    preparing --> ready
-    preparing --> cancelled
-    ready --> completed
-    ready --> cancelled
-    completed --> [*]
-    cancelled --> [*]
-```
-
-Payment states: cash `pending_cash → cash_received`; demo stays
-`demo_confirmed` (simulated). Completion requires confirmed payment.
-
-## 6. Security architecture
-
-- Helmet defaults + strict CSP (`frame-ancestors 'none'`, same-origin only).
-- Body size limit 100 KB; JSON parsing errors → 400 envelope.
-- General per-IP API rate limit (300/min default) + login limiter (5 failed
-  per IP+username per 15 min, reset on success).
-- Sessions in SQLite (`admin_sessions`), 30-min rolling inactivity, 8-hour
-  absolute cap, httpOnly + SameSite=Strict + Secure (HTTPS mode).
-- CSRF: token issued at login, stored server-side in the session, required
-  via `X-CSRF-Token` on all authenticated mutations.
-- `Cache-Control: no-store` on all admin responses; public menu cacheable
-  (max-age 5 s) for PWA offline display.
-- Production startup guard: `NODE_ENV=production` requires
-  `COOKIE_SECURE=true`, `TRUST_PROXY=true`, and a ≥32-char `SESSION_SECRET`.
-- Receipt tokens are opaque, returned once, stored hashed; wrong tokens are
-  indistinguishable from missing receipts (404).
-- Audit logging with request IDs; secrets never logged (pino redaction).
-
-## 7. PWA / caching boundaries
-
-```mermaid
-flowchart LR
-    SW[Service Worker<br/>Workbox generateSW] --> PC[Precache: shell, JS/CSS,<br/>icons, placeholders]
-    SW --> RC1[Runtime: /api/v1/menu<br/>NetworkFirst, 24h]
-    SW --> RC2[Runtime: /placeholders/*<br/>CacheFirst, 30d]
-    SW -. never cached .-> NC[/admin/*, session, orders,<br/>receipts, CSRF/]
-```
-
-## 8. Deployment topology
-
-```mermaid
-flowchart LR
-    T[Tablet<br/>PWA installed] -->|https://kiosk-host| C[Caddy:443]
-    T -->|http redirect| C
-    C -->|127.0.0.1:4000| N[Node]
-    N --> DB[(SQLite data/kiosk.db)]
-    FW[Firewall: LAN-only 80/443<br/>no port forwarding] -.-> C
-```
-
-See DEPLOYMENT.md for certificate trust on Android/iPadOS and device
-locking instructions.
-
-## 9. Key decisions and rationale
-
-| Decision                          | Rationale                                                                                     |
-| --------------------------------- | --------------------------------------------------------------------------------------------- |
-| better-sqlite3 + WAL              | Zero-config local persistence, transactional safety, backup API; single supervised pilot site |
-| Immediate transactions for orders | Sequence allocation must be race-free                                                         |
-| Snapshot columns on order items   | Historical receipts stay stable after menu edits                                              |
-| Hash-only receipt tokens          | Receipts are private; no token storage in the clear                                           |
-| Server-authoritative pricing      | Client prices are ignored by design                                                           |
-| SSE + polling fallback            | Live admin updates without a message broker                                                   |
-| Caddy internal CA                 | HTTPS on the LAN without public certificates                                                  |
-| Zod in shared package             | Same validation on server and client-facing shapes                                            |
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the local and hosted runbooks.

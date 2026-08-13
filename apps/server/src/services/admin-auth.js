@@ -62,11 +62,11 @@ export class LoginRateLimiter {
 }
 
 export class AdminAuthService {
-  constructor({ db, logger }) {
+  constructor({ db, logger, admins, audit }) {
     this.db = db;
     this.logger = logger;
-    this.admins = new AdminRepository(db);
-    this.audit = new AuditRepository(db);
+    this.admins = admins || new AdminRepository(db);
+    this.audit = audit || new AuditRepository(db);
   }
 
   /**
@@ -74,13 +74,13 @@ export class AdminAuthService {
    * The response is intentionally generic for unknown users and wrong
    * passwords alike.
    */
-  login({ username, password, ip, userAgent, requestId }) {
-    const admin = this.admins.findByUsername(username);
+  async login({ username, password, ip, userAgent, requestId }) {
+    const admin = await this.admins.findByUsername(username);
     const valid =
       admin && admin.is_active === 1 && bcrypt.compareSync(password, admin.password_hash);
 
     if (!valid) {
-      this.audit.record({
+      await this.audit.record({
         actor: username || 'unknown',
         actorRole: admin?.role || null,
         action: 'ADMIN_LOGIN_FAILED',
@@ -93,7 +93,7 @@ export class AdminAuthService {
       throw unauthorized('INVALID_CREDENTIALS', 'Invalid username or password');
     }
 
-    this.audit.record({
+    await this.audit.record({
       actor: admin.username,
       actorRole: admin.role,
       action: 'ADMIN_LOGIN_SUCCESS',
@@ -125,18 +125,22 @@ export class AdminAuthService {
     const actor = req.session?.username || 'unknown';
     const actorRole = req.session?.role || null;
     return new Promise((resolve, reject) => {
-      req.session.destroy((err) => {
+      req.session.destroy(async (err) => {
         if (err) return reject(err);
-        this.audit.record({
-          actor,
-          actorRole,
-          action: 'ADMIN_LOGOUT',
-          targetType: 'admin-session',
-          requestId,
-          ip,
-          userAgent,
-        });
-        resolve();
+        try {
+          await this.audit.record({
+            actor,
+            actorRole,
+            action: 'ADMIN_LOGOUT',
+            targetType: 'admin-session',
+            requestId,
+            ip,
+            userAgent,
+          });
+          resolve();
+        } catch (auditError) {
+          reject(auditError);
+        }
       });
     });
   }

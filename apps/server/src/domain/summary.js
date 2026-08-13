@@ -8,11 +8,18 @@ import { isPaymentConfirmed } from '@kiosk/shared';
  * completed-sales totals. Demo totals are always reported separately so the
  * UI can label them as simulated.
  */
-export function buildDailySummary(db, dateTime = nowManila()) {
-  const orders = new OrderRepository(db);
+export function buildDailySummary(db, dateTime = nowManila(), ordersOverride) {
+  const orders = ordersOverride || new OrderRepository(db);
   const businessDate = businessDateString(dateTime);
   const today = orders.list({ date: businessDate });
 
+  if (today && typeof today.then === 'function') {
+    return today.then((rows) => summarize(rows, businessDate));
+  }
+  return summarize(today, businessDate);
+}
+
+function summarize(today, businessDate) {
   const summary = {
     businessDate,
     totalOrders: today.length,

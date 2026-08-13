@@ -12,7 +12,15 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   HOST: z.string().default('127.0.0.1'),
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
+  DATABASE_PROVIDER: z.enum(['sqlite', 'postgres']).default('sqlite'),
   DB_PATH: z.string().default('./data/kiosk.db'),
+  DATABASE_URL: z.string().optional(),
+  PGSSL: z.enum(['true', 'false']).default('true'),
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(20).default(5),
+  DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().positive().default(8000),
+  DEPLOYMENT_ID: z.string().default('local-primary'),
+  SERVE_WEB: z.enum(['true', 'false']).default('true'),
+  PUBLIC_ORIGINS: z.string().default(''),
   SESSION_SECRET: z.string().optional(),
   COOKIE_SECURE: z.enum(['true', 'false']).default('false'),
   TRUST_PROXY: z.enum(['true', 'false']).default('false'),
@@ -80,5 +88,15 @@ export function loadEnv(overrides = {}) {
     cookieSecure: env.COOKIE_SECURE === 'true',
     trustProxy: env.TRUST_PROXY === 'true',
     dbPath: resolveDbPath(env.DB_PATH),
+    databaseProvider: env.DATABASE_PROVIDER,
+    databaseUrl: env.DATABASE_URL,
+    pgssl: env.PGSSL === 'true',
+    databasePoolMax: env.DATABASE_POOL_MAX,
+    databaseStatementTimeoutMs: env.DATABASE_STATEMENT_TIMEOUT_MS,
+    deploymentId: env.DEPLOYMENT_ID,
+    serveWeb: env.SERVE_WEB === 'true',
+    publicOrigins: env.PUBLIC_ORIGINS.split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean),
   };
 }

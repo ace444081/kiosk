@@ -14,6 +14,7 @@ import { AdminOrderDetail } from './admin/AdminOrderDetail.jsx';
 import { AdminMenu } from './admin/AdminMenu.jsx';
 import { AdminActivity } from './admin/AdminActivity.jsx';
 import { AdminReports } from './admin/AdminReports.jsx';
+import { StandbyScreen } from './admin/StandbyScreen.jsx';
 import { StaffLoginScreen } from './staff/StaffLoginScreen.jsx';
 import { StaffShell, StaffLauncher } from './staff/StaffShell.jsx';
 import { StationScreen } from './staff/StationScreen.jsx';
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="menu" element={<AdminMenu />} />
         <Route path="activity" element={<AdminActivity />} />
         <Route path="reports" element={<AdminReports />} />
+        <Route path="standby" element={<StandbyScreen />} />
       </Route>
       <Route path="/staff/login" element={<StaffLoginScreen />} />
       <Route path="/staff" element={<StaffShell />}>

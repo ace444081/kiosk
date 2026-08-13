@@ -8,11 +8,16 @@ pnpm-debug.log*
 # Build output
 dist/
 build/
+.vercel/
 
 # Database and runtime data
 data/*
 !data/.gitkeep
 data/*.sqlite3*
+*.dump
+*.dump.gz
+*.backup
+supabase/.temp/
 
 # Backups
 backups/*

@@ -10,19 +10,26 @@ export function requireAuth(req, res, next) {
 }
 
 /** Resolve the account on every request so pre-migration sessions gain roles. */
-export function resolveStaff(db) {
+export function resolveStaff(source) {
   return (req, res, next) => {
     if (!req.session?.adminId) return next(unauthorized('UNAUTHORIZED', 'Authentication required'));
-    const account = db
-      .prepare('SELECT id, username, role, is_active FROM admins WHERE id = ?')
-      .get(req.session.adminId);
-    if (!account || account.is_active !== 1) {
-      return next(unauthorized('UNAUTHORIZED', 'Authentication required'));
-    }
-    req.staff = account;
-    req.session.username = account.username;
-    req.session.role = account.role;
-    next();
+    Promise.resolve(
+      typeof source.findById === 'function'
+        ? source.findById(req.session.adminId)
+        : source
+            .prepare('SELECT id, username, role, is_active FROM admins WHERE id = ?')
+            .get(req.session.adminId),
+    )
+      .then((account) => {
+        if (!account || account.is_active !== 1) {
+          return next(unauthorized('UNAUTHORIZED', 'Authentication required'));
+        }
+        req.staff = account;
+        req.session.username = account.username;
+        req.session.role = account.role;
+        next();
+      })
+      .catch(next);
   };
 }
 

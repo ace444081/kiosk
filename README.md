@@ -1,35 +1,65 @@
-# Sweet Gonz Bakeshop Cafe Kiosk
+# Sweet Gonz Kiosk
 
-Sweet Gonz is a local-network self-service ordering kiosk and restaurant
-operations pilot. It includes a customer kiosk, admin console, cashier queue,
-kitchen display, serving counter, public order board, reports, and audit logs.
+Sweet Gonz is a supervised restaurant-ordering pilot for Sweet Gonz Bakeshop
+Cafe. It provides a bilingual customer kiosk, admin console, cashier queue,
+kitchen display, serving counter, public order board, reports, SOA export, and
+audit history.
 
-This repository is intended for supervised demonstrations and school/client
-pilot work. E-wallet payments are simulated only. It does not connect to
-GCash, Maya, cards, banks, merchant QR codes, or any real payment provider.
+The application supports simulated e-wallet payments only. It is not a real
+payment terminal and must not be used to collect card, bank, GCash, or Maya
+credentials.
 
-## Included
+## Architecture
 
-- English/Filipino customer ordering, customization, cart, checkout, and receipts
-- Cash and simulated e-wallet payment paths
-- Admin dashboard, menu availability, reports, SOA export, and audit activity
-- Role-based cashier, kitchen, and serving workflows
-- Preparation timers with item-count-adjusted urgency states
-- Anonymous customer order board
-- SQLite persistence with migrations, backups, and integrity checks
-- Responsive tablet, desktop, and phone layouts
-- Optional local HTTPS through Caddy
+The preferred demo path is local access. The hosted path is a prepared fallback
+using the same Supabase PostgreSQL database, so changing from local URLs to the
+cloud URL does not require merging two order histories.
+
+```mermaid
+flowchart LR
+  D[Local laptops and tablets] --> L[Local Vite + Express]
+  V[Vercel: sweetgonz.vercel.app] --> R[Render: sweetgonz-api]
+  L --> S[(Supabase PostgreSQL)]
+  R --> S
+```
+
+- Vercel hosts the React/Vite interface.
+- Render hosts the Express API, sessions, workflow rules, reporting, and SSE.
+- Supabase stores the private `app` schema and is accessed by the backend only.
+- SQLite remains available for rollback and offline/local recovery tooling. It
+  is not the runtime provider after the PostgreSQL cutover.
+
+## Roles and routes
+
+| Surface               | Route            |
+| --------------------- | ---------------- |
+| Customer kiosk        | `/kiosk`         |
+| Admin console         | `/admin`         |
+| Cashier               | `/staff/cashier` |
+| Kitchen               | `/staff/kitchen` |
+| Serving counter       | `/staff/serving` |
+| Customer order board  | `/order-board`   |
+| Cloud standby monitor | `/admin/standby` |
+
+The whole-order flow is:
+
+```text
+Kiosk -> Cashier payment -> Kitchen preparation -> Serving counter -> Completed
+```
+
+Cash orders wait for payment confirmation. Simulated wallet orders are already
+paid and enter the kitchen queue. The preparation timer starts only when the
+order becomes `preparing`.
 
 ## Requirements
 
 - Node.js 20 or newer
 - npm 9 or newer
 - Git
-- Caddy only when HTTPS/PWA installation on LAN devices is required
+- A Supabase project for the shared PostgreSQL deployment
+- Render and Vercel accounts for the hosted fallback
 
-## Local setup
-
-From the repository root:
+## Local installation
 
 ```powershell
 npm ci
@@ -39,95 +69,164 @@ npm run db:seed
 npm run admin:create
 ```
 
-Use cp .env.example .env instead of Copy-Item in Bash or WSL. Never commit
-.env. Use a long, unique SESSION_SECRET for a shared pilot environment.
-Credentials are created locally and are not seeded into source control.
+Use `cp .env.example .env` in Bash or WSL. Keep `.env` private. Create staff
+accounts interactively; never seed passwords into the repository.
 
-## Run locally
+For the SQLite rollback path, leave `DATABASE_PROVIDER=sqlite`. For the shared
+database path, set these private values in `.env`:
 
-```powershell
-npm run dev
+```dotenv
+DATABASE_PROVIDER=postgres
+DATABASE_URL=<private-supabase-connection-string>
+PGSSL=true
+DEPLOYMENT_ID=local-primary
 ```
 
-Local routes:
+The database URL is used only by Express. Do not add it to Vercel or any
+`VITE_*` variable.
 
-| Surface              | URL                                 |
-| -------------------- | ----------------------------------- |
-| Customer kiosk       | http://127.0.0.1:5173/kiosk         |
-| Admin console        | http://127.0.0.1:5173/admin         |
-| Staff login          | http://127.0.0.1:5173/staff/login   |
-| Cashier              | http://127.0.0.1:5173/staff/cashier |
-| Kitchen              | http://127.0.0.1:5173/staff/kitchen |
-| Serving counter      | http://127.0.0.1:5173/staff/serving |
-| Customer order board | http://127.0.0.1:5173/order-board   |
+## Run the local demo
 
-For a private-LAN demo, run the API and web server in separate terminals:
+Start the API in one terminal:
 
 ```powershell
-# Terminal 1, repository root
 npm run dev:server
 ```
 
-```powershell
-# Terminal 2, apps/web directory
-npm run dev -- --host 0.0.0.0
-```
-
-Open http://HOST-LAN-IP:5173/kiosk on a device on the same private LAN.
-Keep SQLite on the host computer, never on a network share. Do not configure
-router port forwarding. For the recommended HTTPS/PWA setup, see
-docs/DEPLOYMENT.md.
-
-## Restaurant workflow
-
-```text
-Kiosk -> Cashier payment -> Kitchen preparation -> Serving counter -> Completed
-```
-
-Cash orders wait for payment confirmation. Simulated e-wallet orders bypass the
-cashier queue. The preparation timer starts when an eligible order enters
-preparing and stops when the order is completed.
-
-## Tests and quality
+Start Vite in another terminal. To allow tablets and phones on the same private
+LAN, expose only Vite on the LAN:
 
 ```powershell
+npm run dev -w apps/web -- --host 0.0.0.0
+```
+
+Open the local machine's LAN address on each device. The API remains behind the
+Vite proxy. Do not expose port 4000 directly and do not enable router port
+forwarding.
+
+## Hosted fallback deployment
+
+### 1. Supabase
+
+Create a free project named `sweetgonz-db`, preferably in Singapore. Apply the
+PostgreSQL migration through the migration command or SQL editor, then create a
+least-privilege runtime role for the backend. Keep the migration-owner
+credential separate from the Render runtime credential.
+
+Configure the runtime role with access to the private `app` schema only. The
+grant template is [deploy/supabase-runtime-grants.sql](deploy/supabase-runtime-grants.sql).
+The Supabase Data API is not used by this application; the browser never
+receives a database key.
+
+Run the full-data import from the existing SQLite pilot database only after
+creating a verified backup:
+
+```powershell
+$env:DATABASE_PROVIDER = "postgres"
+$env:DATABASE_URL = "<private-supabase-connection-string>"
+npm run db:import:postgres
+```
+
+The importer copies catalog data, staff accounts and bcrypt hashes, orders,
+order items, and audit history. Active sessions are intentionally discarded.
+It prints table counts and completed-sales reconciliation and stops if the
+target already contains data unless `--replace` is explicitly supplied.
+
+### 2. Render
+
+Create the `sweetgonz-api` web service from `render.yaml`. Set these secrets in
+Render, never in Git:
+
+- `DATABASE_URL`
+- `MIGRATION_DATABASE_URL` (migration-owner connection kept separate from the runtime role)
+- `SESSION_SECRET` (at least 32 random characters)
+
+The service binds to Render's `PORT`, runs the idempotent migration command at
+boot, and serves API routes only. Its health check is `/api/v1/health`.
+
+### 3. Vercel
+
+Create a Vercel project named `sweetgonz` from the repository root. The build
+configuration is already in `vercel.json`:
+
+- install: `npm ci`
+- build: `npm run build -w apps/web`
+- output: `apps/web/dist`
+- preferred URL: `https://sweetgonz.vercel.app`
+- fallback URL: `https://sweetgonz-kiosk.vercel.app`
+
+The `/api/*` rewrite keeps the browser on the Vercel origin while forwarding
+requests to Render. If Render assigns a different hostname, update the
+destination in `vercel.json` before the production deployment.
+
+No database or session secrets belong in Vercel because it only serves the
+frontend in this architecture.
+
+## Demo failover runbook
+
+1. Open `https://sweetgonz.vercel.app/admin/login` on a spare device.
+2. Sign in as an administrator and open `/admin/standby`.
+3. Leave that page open; it checks the cloud health endpoint once per minute so
+   the free Render service remains warm.
+4. Run the normal demo through local URLs.
+5. If the local server fails, stop submitting new local orders and open the
+   equivalent Vercel route on each station device.
+6. Confirm the cloud health indicator is ready before resuming transactions.
+7. After the demo, export the SOA and review audit events by deployment ID.
+
+If the standby monitor was not open, Render may need a cold start. Free-tier
+hosting cannot guarantee instant failover.
+
+## Verification
+
+```powershell
+npm run build
 npm test
-npm run test:e2e
 npm run lint
 npm run format:check
-npm run build
+npm run healthcheck
 ```
 
-Playwright may require a one-time browser installation:
+For browser verification:
 
 ```powershell
-cd apps/web
-npx playwright install chromium
-cd ../..
+npm run test:e2e
 ```
 
-## Data and security boundaries
+Verify the full chain with separate sessions: kiosk order, cash confirmation,
+kitchen preparation, ready handoff, serving completion, public-board dwell,
+report/SOA export, and audit history. Test desktop, tablet landscape, tablet
+portrait, and 390px phone layouts.
 
-- Development and pilot data is local to the host computer.
-- .env, SQLite databases, backups, logs, certificates, test reports, and local
-  screenshots are ignored by Git.
-- Never put credentials, payment information, private network details, or
-  customer data in source files, commits, issues, or screenshots.
-- Real payment processing, public internet deployment, cloud synchronization,
-  SMS, printers, and multi-branch routing are outside this pilot.
+## Security and operational boundaries
+
+- Sessions are server-side, `HttpOnly`, `SameSite=Strict`, and secure in hosted
+  mode.
+- CSRF tokens, role checks, optimistic versions, rate limits, origin checks,
+  CSP, and request IDs remain enabled.
+- Public order-board responses expose anonymous order numbers and public status
+  only.
+- Receipt tokens are returned once and stored only as hashes.
+- Amounts are integer centavos; customer prices are never trusted from the
+  browser.
+- No credentials, database files, backups, IP addresses, tokens, logs, or
+  customer records belong in Git.
+- This is a supervised single-site pilot. Printers, real payment gateways,
+  SMS, multi-branch routing, and active-active failover are out of scope.
 
 ## Documentation
 
-- Architecture: docs/ARCHITECTURE.md
-- Deployment: docs/DEPLOYMENT.md
-- Admin and operator manual: docs/ADMIN_OPERATOR_MANUAL.md
-- API reference: docs/API.md
-- Database dictionary: docs/DATABASE_DICTIONARY.md
-- Backup and restore: docs/BACKUP_RESTORE.md
-- Test plan: docs/TEST_PLAN.md
-- Known limitations: docs/KNOWN_LIMITATIONS.md
+- [Architecture](docs/ARCHITECTURE.md)
+- [Deployment](docs/DEPLOYMENT.md)
+- [API reference](docs/API.md)
+- [Database dictionary](docs/DATABASE_DICTIONARY.md)
+- [Backup and restore](docs/BACKUP_RESTORE.md)
+- [Admin/operator manual](docs/ADMIN_OPERATOR_MANUAL.md)
+- [Test plan](docs/TEST_PLAN.md)
+- [Known limitations](docs/KNOWN_LIMITATIONS.md)
+- [Contributing](CONTRIBUTING.md)
+- [MIT license](LICENSE)
 
-## Contributing and license
+## License
 
-See CONTRIBUTING.md for development and review guidance. This project is
-licensed under the MIT License; see LICENSE.
+This project is licensed under the MIT License. See [LICENSE](LICENSE).

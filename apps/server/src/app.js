@@ -7,6 +7,7 @@ import helmet from 'helmet';
 import { MAX_JSON_BODY_BYTES, SESSION_INACTIVITY_MS } from '@kiosk/shared';
 import { REPO_ROOT } from './config/env.js';
 import { SqliteSessionStore } from './db/session-store.js';
+import { PostgresSessionStore } from './db/postgres-session-store.js';
 import { createLogger, createHttpLogger } from './utils/logger.js';
 import { requestIdMiddleware } from './middleware/request-id.js';
 import { apiRateLimit, loginRateLimit } from './middleware/rate-limit.js';
@@ -18,9 +19,21 @@ import { EventBus } from './services/event-bus.js';
 import { AuditRepository } from './repositories/audit.js';
 import { OrderService } from './domain/order-service.js';
 import { AdminAuthService } from './services/admin-auth.js';
+import {
+  PgAdminRepository,
+  PgAuditRepository,
+  PgCatalogRepository,
+  PgOrderRepository,
+} from './postgres/repositories.js';
+import { PgOrderService } from './postgres/order-service.js';
 
 export function createApp({ env, db, logger = createLogger(env.logLevel) }) {
   const app = express();
+  const isPostgres = env.databaseProvider === 'postgres' || db.dialect === 'postgres';
+  const admins = isPostgres ? new PgAdminRepository(db) : null;
+  const catalog = isPostgres ? new PgCatalogRepository(db) : null;
+  const orders = isPostgres ? new PgOrderRepository(db) : null;
+  const audit = isPostgres ? new PgAuditRepository(db, env.deploymentId) : new AuditRepository(db);
 
   if (env.trustProxy) {
     app.set('trust proxy', 1);
@@ -53,7 +66,19 @@ export function createApp({ env, db, logger = createLogger(env.logLevel) }) {
   app.use(requestIdMiddleware);
   app.use(createHttpLogger(logger));
   app.use(express.json({ limit: MAX_JSON_BODY_BYTES }));
+  app.use('/api', (req, res, next) => {
+    const origin = req.get('Origin');
+    const isMutation = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
+    if (!origin || !isMutation || !env.publicOrigins.length || env.publicOrigins.includes(origin)) {
+      return next();
+    }
+    return res.status(403).json({
+      error: { code: 'ORIGIN_NOT_ALLOWED', message: 'Request origin is not allowed' },
+      requestId: req.id,
+    });
+  });
 
+  const sessionStore = isPostgres ? new PostgresSessionStore(db) : new SqliteSessionStore(db);
   const createSessionMiddleware = (name) =>
     session({
       name,
@@ -61,7 +86,7 @@ export function createApp({ env, db, logger = createLogger(env.logLevel) }) {
       resave: false,
       saveUninitialized: false,
       rolling: true, // 30-minute inactivity window
-      store: new SqliteSessionStore(db),
+      store: sessionStore,
       cookie: {
         httpOnly: true,
         sameSite: 'strict',
@@ -90,28 +115,40 @@ export function createApp({ env, db, logger = createLogger(env.logLevel) }) {
   );
 
   const eventBus = new EventBus();
-  const audit = new AuditRepository(db);
-  const orderService = new OrderService({ db, eventBus, audit });
-  const authService = new AdminAuthService({ db, logger });
+  const orderService = isPostgres
+    ? new PgOrderService({ db, eventBus, audit, deploymentId: env.deploymentId })
+    : new OrderService({ db, eventBus, audit });
+  const authService = new AdminAuthService({ db, logger, admins, audit });
   const loginLimit = loginRateLimit({
     max: env.LOGIN_RATE_LIMIT_MAX,
     windowMs: env.LOGIN_RATE_LIMIT_WINDOW_MS,
   });
 
-  app.use('/api/v1', publicRoutes({ db, orderService, eventBus, logger }));
+  app.use('/api/v1', publicRoutes({ db, orderService, eventBus, logger, catalog, orders }));
   app.use(
     '/api/v1/admin',
-    adminRoutes({ db, authService, orderService, eventBus, logger, loginLimit }),
+    adminRoutes({
+      db,
+      authService,
+      orderService,
+      eventBus,
+      logger,
+      loginLimit,
+      admins,
+      catalog,
+      orders,
+      audit,
+    }),
   );
   app.use(
     '/api/v1/staff',
     createSessionMiddleware('sgkiosk.staff.sid'),
-    staffRoutes({ db, authService, orderService, eventBus, logger, loginLimit }),
+    staffRoutes({ db, authService, orderService, eventBus, logger, loginLimit, orders, admins }),
   );
 
   // Production: serve the built SPA with client-side routing fallback.
   const webDist = path.join(REPO_ROOT, 'apps', 'web', 'dist');
-  if (env.NODE_ENV === 'production' && fs.existsSync(webDist)) {
+  if (env.NODE_ENV === 'production' && env.serveWeb && fs.existsSync(webDist)) {
     app.use(express.static(webDist, { index: false, maxAge: '1h', immutable: false }));
     app.get(/^\/(?!api).*/, (req, res) => {
       res.sendFile(path.join(webDist, 'index.html'));

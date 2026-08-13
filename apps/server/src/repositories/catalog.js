@@ -29,6 +29,31 @@ export class CatalogRepository {
     return this.db.prepare('SELECT * FROM addons ORDER BY sort_order, name_en').all();
   }
 
+  getPublishedMenuData() {
+    const categories = this.listCategories();
+    const products = this.listProducts({ publishedOnly: true });
+    const addons = this.listAddons();
+    const productIds = products.map((product) => product.id);
+    if (!productIds.length) {
+      return { categories, products, addons, productAddonRows: [], optionGroups: [], options: [] };
+    }
+    const productPlaceholders = productIds.map(() => '?').join(',');
+    const productAddonRows = this.db
+      .prepare(
+        `SELECT product_id, addon_id FROM product_addons WHERE product_id IN (${productPlaceholders})`,
+      )
+      .all(...productIds);
+    const optionGroups = this.db
+      .prepare(
+        `SELECT * FROM product_option_groups
+         WHERE product_id IN (${productPlaceholders}) ORDER BY product_id, sort_order`,
+      )
+      .all(...productIds);
+    const groupIds = optionGroups.map((group) => group.id);
+    const options = this.optionsForGroups(groupIds);
+    return { categories, products, addons, productAddonRows, optionGroups, options };
+  }
+
   findAddonsByIds(ids) {
     if (!ids.length) return [];
     const placeholders = ids.map(() => '?').join(',');

@@ -32,8 +32,9 @@ function sessionPayload(req, account) {
   };
 }
 
-function stationOrder(orderService, orders, row, station) {
-  const full = orderService.serializeOrder(orders.detail(row.id));
+async function stationOrder(orderService, orders, row, station, details) {
+  const detail = details?.get(row.id) || (await orders.detail(row.id));
+  const full = orderService.serializeOrder(detail);
   const base = {
     id: full.id,
     orderNumber: full.orderNumber,
@@ -57,15 +58,23 @@ function stationOrder(orderService, orders, row, station) {
   return base;
 }
 
-export function staffRoutes({ db, authService, orderService, eventBus, loginLimit }) {
+export function staffRoutes({
+  db,
+  authService,
+  orderService,
+  eventBus,
+  loginLimit,
+  orders: ordersOverride,
+  admins: adminsOverride,
+}) {
   const router = Router();
-  const orders = new OrderRepository(db);
+  const orders = ordersOverride || new OrderRepository(db);
   router.use(noStore);
 
   router.post('/session', loginLimit.middleware, async (req, res, next) => {
     try {
       const input = parse(adminLoginSchema, req.body);
-      const account = authService.login({
+      const account = await authService.login({
         username: input.username,
         password: input.password,
         ip: req.ip,
@@ -83,7 +92,7 @@ export function staffRoutes({ db, authService, orderService, eventBus, loginLimi
     }
   });
 
-  router.get('/session', requireAuth, resolveStaff(db), (req, res) => {
+  router.get('/session', requireAuth, resolveStaff(adminsOverride || db), (req, res) => {
     res.json(sessionPayload(req, req.staff));
   });
 
@@ -102,9 +111,9 @@ export function staffRoutes({ db, authService, orderService, eventBus, loginLimi
     }
   });
 
-  router.use(requireAuth, resolveStaff(db));
+  router.use(requireAuth, resolveStaff(adminsOverride || db));
 
-  router.get('/queue/:station', (req, res, next) => {
+  router.get('/queue/:station', async (req, res, next) => {
     try {
       const { station } = req.params;
       if (!STATIONS.includes(station)) throw badRequest('INVALID_STATION', 'Unknown station');
@@ -115,10 +124,16 @@ export function staffRoutes({ db, authService, orderService, eventBus, loginLimi
         });
       }
       const page = Math.max(1, Number.parseInt(req.query.page || '1', 10) || 1);
-      const queue = orders.listStationQueue(station, { page, pageSize: 20 });
+      const queue = await orders.listStationQueue(station, { page, pageSize: 20 });
+      const details = orders.detailMany
+        ? await orders.detailMany(queue.rows.map((row) => row.id))
+        : null;
+      const stationOrders = await Promise.all(
+        queue.rows.map((row) => stationOrder(orderService, orders, row, station, details)),
+      );
       res.json({
         station,
-        orders: queue.rows.map((row) => stationOrder(orderService, orders, row, station)),
+        orders: stationOrders,
         pagination: {
           page: queue.page,
           pages: queue.pages,
@@ -135,14 +150,14 @@ export function staffRoutes({ db, authService, orderService, eventBus, loginLimi
     '/orders/:id/payment',
     requireRoles('admin', 'cashier'),
     requireCsrf,
-    (req, res, next) => {
+    async (req, res, next) => {
       try {
         const input = parse(paymentPatchSchema, req.body);
-        const order = orders.findById(req.params.id);
+        const order = await orders.findById(req.params.id);
         if (order?.status !== 'placed') {
           throw conflict('INVALID_STATION_ACTION', 'Cash can only be confirmed before preparation');
         }
-        const updated = orderService.confirmCash({
+        const updated = await orderService.confirmCash({
           orderId: req.params.id,
           version: input.version,
           actor: req.staff.username,
@@ -157,10 +172,10 @@ export function staffRoutes({ db, authService, orderService, eventBus, loginLimi
     },
   );
 
-  router.patch('/orders/:id/status', requireCsrf, (req, res, next) => {
+  router.patch('/orders/:id/status', requireCsrf, async (req, res, next) => {
     try {
       const input = parse(statusPatchSchema, req.body);
-      const current = orders.findById(req.params.id);
+      const current = await orders.findById(req.params.id);
       const role = req.staff.role;
       const allowed =
         role === 'admin' ||
@@ -173,7 +188,7 @@ export function staffRoutes({ db, authService, orderService, eventBus, loginLimi
           requestId: req.id,
         });
       }
-      const updated = orderService.changeStatus({
+      const updated = await orderService.changeStatus({
         orderId: req.params.id,
         newStatus: input.status,
         version: input.version,

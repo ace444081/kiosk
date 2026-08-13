@@ -9,15 +9,21 @@ import { OrderRepository } from '../repositories/orders.js';
 
 const IDEMPOTENCY_KEY_RE = /^[A-Za-z0-9_-]{8,128}$/;
 
-export function publicRoutes({ db, orderService, eventBus }) {
+export function publicRoutes({
+  db,
+  orderService,
+  eventBus,
+  catalog: catalogOverride,
+  orders: ordersOverride,
+}) {
   const router = Router();
-  const catalog = new CatalogRepository(db);
-  const orders = new OrderRepository(db);
+  const catalog = catalogOverride || new CatalogRepository(db);
+  const orders = ordersOverride || new OrderRepository(db);
 
-  router.get('/orders/board', (req, res, next) => {
+  router.get('/orders/board', async (req, res, next) => {
     try {
       const businessDate = DateTime.now().setZone(BUSINESS_TIMEZONE).toFormat('yyyy-MM-dd');
-      const board = orders.listPublicBoard(businessDate).map((order) => ({
+      const board = (await orders.listPublicBoard(businessDate)).map((order) => ({
         orderNumber: order.order_number,
         publicStatus: ['ready', 'completed'].includes(order.status) ? 'now_serving' : 'preparing',
         displayTimestamp:
@@ -54,16 +60,42 @@ export function publicRoutes({ db, orderService, eventBus }) {
    * Localized menu with categories, products, add-ons and option groups.
    * Cacheable: the PWA stores the latest successful response for offline use.
    */
-  router.get('/menu', (req, res, next) => {
+  router.get('/menu', async (req, res, next) => {
     try {
       const parsed = localeSchema.safeParse(req.query.locale || 'en');
       const locale = parsed.success ? parsed.data : 'en';
       const isFil = locale === 'fil';
 
-      const categories = catalog.listCategories();
-      const products = catalog.listProducts({ publishedOnly: true });
-      const addons = catalog.listAddons();
+      const menuData = catalog.getPublishedMenuData
+        ? await catalog.getPublishedMenuData()
+        : {
+            categories: await catalog.listCategories(),
+            products: await catalog.listProducts({ publishedOnly: true }),
+            addons: await catalog.listAddons(),
+            productAddonRows: [],
+            optionGroups: [],
+            options: [],
+          };
+      const { categories, products, addons, productAddonRows, optionGroups, options } = menuData;
       const addonById = new Map(addons.map((a) => [a.id, a]));
+      const addonIdsByProduct = new Map();
+      for (const relation of productAddonRows) {
+        const list = addonIdsByProduct.get(relation.product_id) || [];
+        list.push(relation.addon_id);
+        addonIdsByProduct.set(relation.product_id, list);
+      }
+      const optionGroupsByProduct = new Map();
+      for (const group of optionGroups) {
+        const list = optionGroupsByProduct.get(group.product_id) || [];
+        list.push(group);
+        optionGroupsByProduct.set(group.product_id, list);
+      }
+      const optionsByGroup = new Map();
+      for (const option of options) {
+        const list = optionsByGroup.get(option.group_id) || [];
+        list.push(option);
+        optionsByGroup.set(option.group_id, list);
+      }
 
       const productsByCategory = new Map();
       for (const p of products) {
@@ -77,15 +109,7 @@ export function publicRoutes({ db, orderService, eventBus }) {
         generatedAt: new Date().toISOString(),
         categories: categories.map((category) => {
           const categoryProducts = (productsByCategory.get(category.id) || []).map((p) => {
-            const groups = catalog.optionGroupsForProduct(p.id);
-            const groupIds = groups.map((g) => g.id);
-            const options = catalog.optionsForGroups(groupIds);
-            const optionByGroup = new Map();
-            for (const option of options) {
-              const list = optionByGroup.get(option.group_id) || [];
-              list.push(option);
-              optionByGroup.set(option.group_id, list);
-            }
+            const groups = optionGroupsByProduct.get(p.id) || [];
             return {
               id: p.id,
               sku: p.sku,
@@ -95,8 +119,7 @@ export function publicRoutes({ db, orderService, eventBus }) {
               imagePath: p.image_path,
               isAvailable: p.is_available === 1,
               version: p.version,
-              addons: catalog
-                .addonIdsForProduct(p.id)
+              addons: (addonIdsByProduct.get(p.id) || [])
                 .map((addonId) => {
                   const addon = addonById.get(addonId);
                   if (!addon) return null;
@@ -110,10 +133,10 @@ export function publicRoutes({ db, orderService, eventBus }) {
               optionGroups: groups.map((g) => ({
                 id: g.id,
                 name: isFil ? g.name_fil : g.name_en,
-                isRequired: g.is_required === 1,
+                isRequired: g.is_required === 1 || g.is_required === true,
                 minSelect: g.min_select,
                 maxSelect: g.max_select,
-                options: (optionByGroup.get(g.id) || []).map((o) => ({
+                options: (optionsByGroup.get(g.id) || []).map((o) => ({
                   id: o.id,
                   name: isFil ? o.name_fil : o.name_en,
                   priceCentavos: o.price_centavos,
@@ -142,7 +165,7 @@ export function publicRoutes({ db, orderService, eventBus }) {
    * loads current catalog data, validates, prices, snapshots, and commits
    * atomically.
    */
-  router.post('/orders', (req, res, next) => {
+  router.post('/orders', async (req, res, next) => {
     try {
       const idempotencyKey = req.get('Idempotency-Key');
       if (!idempotencyKey || !IDEMPOTENCY_KEY_RE.test(idempotencyKey)) {
@@ -155,7 +178,7 @@ export function publicRoutes({ db, orderService, eventBus }) {
         throw badRequest(envelope.code, envelope.message, envelope.fieldErrors);
       }
 
-      const result = orderService.createOrder({
+      const result = await orderService.createOrder({
         input: parsed.data,
         idempotencyKey,
         locale: parsed.data.locale,
@@ -189,9 +212,9 @@ export function publicRoutes({ db, orderService, eventBus }) {
    * hash is stored, so wrong tokens are indistinguishable from missing
    * receipts (404).
    */
-  router.get('/orders/:orderNumber/receipt', (req, res, next) => {
+  router.get('/orders/:orderNumber/receipt', async (req, res, next) => {
     try {
-      const receipt = orderService.getReceipt(req.params.orderNumber, req.query.token);
+      const receipt = await orderService.getReceipt(req.params.orderNumber, req.query.token);
       res.setHeader('Cache-Control', 'no-store');
       res.json({ receipt });
     } catch (err) {
@@ -200,11 +223,12 @@ export function publicRoutes({ db, orderService, eventBus }) {
   });
 
   /** GET /api/v1/health */
-  router.get('/health', (req, res) => {
+  router.get('/health', async (req, res) => {
     let dbOk = true;
     let dbError = null;
     try {
-      db.prepare('SELECT 1').get();
+      if (typeof db.health === 'function') await db.health();
+      else db.prepare('SELECT 1').get();
     } catch (err) {
       dbOk = false;
       dbError = err.message;

@@ -54,6 +54,7 @@ function serializeProduct(product, categoryById) {
 
 function parseJson(value) {
   if (!value) return null;
+  if (typeof value === 'object') return value;
   try {
     return JSON.parse(value);
   } catch {
@@ -61,11 +62,23 @@ function parseJson(value) {
   }
 }
 
-export function adminRoutes({ db, authService, orderService, eventBus, logger, loginLimit }) {
+export function adminRoutes({
+  db,
+  authService,
+  orderService,
+  eventBus,
+  logger,
+  loginLimit,
+  admins: adminsOverride,
+  catalog: catalogOverride,
+  orders: ordersOverride,
+  audit: auditOverride,
+}) {
   const router = Router();
-  const catalog = new CatalogRepository(db);
-  const orders = new OrderRepository(db);
-  const audit = new AuditRepository(db);
+  const admins = adminsOverride;
+  const catalog = catalogOverride || new CatalogRepository(db);
+  const orders = ordersOverride || new OrderRepository(db);
+  const audit = auditOverride || new AuditRepository(db);
 
   // All admin responses are sensitive: never cache.
   router.use(noStore);
@@ -74,7 +87,7 @@ export function adminRoutes({ db, authService, orderService, eventBus, logger, l
   router.post('/session', loginLimit.middleware, async (req, res, next) => {
     try {
       const input = parseOrThrow(adminLoginSchema, req.body);
-      const admin = authService.login({
+      const admin = await authService.login({
         username: input.username,
         password: input.password,
         ip: req.ip,
@@ -99,7 +112,7 @@ export function adminRoutes({ db, authService, orderService, eventBus, logger, l
     }
   });
 
-  router.get('/session', (req, res, next) => {
+  router.get('/session', async (req, res, next) => {
     try {
       if (!req.session?.adminId) {
         return res.status(401).json({
@@ -107,9 +120,11 @@ export function adminRoutes({ db, authService, orderService, eventBus, logger, l
           requestId: req.id,
         });
       }
-      const account = db
-        .prepare('SELECT username, role, is_active FROM admins WHERE id = ?')
-        .get(req.session.adminId);
+      const account = admins
+        ? await admins.findById(req.session.adminId)
+        : db
+            .prepare('SELECT username, role, is_active FROM admins WHERE id = ?')
+            .get(req.session.adminId);
       if (!account || account.is_active !== 1) {
         return res.status(401).json({
           error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
@@ -144,13 +159,13 @@ export function adminRoutes({ db, authService, orderService, eventBus, logger, l
   });
 
   // Everything below is the supervisory console and is admin-only.
-  router.use(requireAuth, resolveStaff(db), requireRoles('admin'));
+  router.use(requireAuth, resolveStaff(admins || db), requireRoles('admin'));
 
   // --- Orders --------------------------------------------------------------
-  router.get('/orders', (req, res, next) => {
+  router.get('/orders', async (req, res, next) => {
     try {
       const filters = parseOrThrow(listOrdersQuerySchema, req.query);
-      const rows = orders.list(filters);
+      const rows = await orders.list(filters);
       const list = rows.map((row) => ({
         id: row.id,
         orderNumber: row.order_number,
@@ -177,9 +192,9 @@ export function adminRoutes({ db, authService, orderService, eventBus, logger, l
     }
   });
 
-  router.get('/orders/:id', (req, res, next) => {
+  router.get('/orders/:id', async (req, res, next) => {
     try {
-      const order = orders.detail(req.params.id);
+      const order = await orders.detail(req.params.id);
       if (!order) throw notFound('ORDER_NOT_FOUND', 'Order not found');
       res.json({ order: orderService.serializeOrder(order) });
     } catch (err) {
@@ -187,10 +202,10 @@ export function adminRoutes({ db, authService, orderService, eventBus, logger, l
     }
   });
 
-  router.patch('/orders/:id/status', requireCsrf, (req, res, next) => {
+  router.patch('/orders/:id/status', requireCsrf, async (req, res, next) => {
     try {
       const input = parseOrThrow(statusPatchSchema, req.body);
-      const updated = orderService.changeStatus({
+      const updated = await orderService.changeStatus({
         orderId: req.params.id,
         newStatus: input.status,
         version: input.version,
@@ -205,10 +220,10 @@ export function adminRoutes({ db, authService, orderService, eventBus, logger, l
     }
   });
 
-  router.patch('/orders/:id/payment', requireCsrf, (req, res, next) => {
+  router.patch('/orders/:id/payment', requireCsrf, async (req, res, next) => {
     try {
       const input = parseOrThrow(paymentPatchSchema, req.body);
-      const updated = orderService.confirmCash({
+      const updated = await orderService.confirmCash({
         orderId: req.params.id,
         version: input.version,
         actor: req.session.username,
@@ -223,11 +238,11 @@ export function adminRoutes({ db, authService, orderService, eventBus, logger, l
   });
 
   // --- Products / availability ---------------------------------------------
-  router.get('/products', requireAuth, (req, res, next) => {
+  router.get('/products', requireAuth, async (req, res, next) => {
     try {
       const filters = parseOrThrow(listProductsQuerySchema, req.query);
-      const rows = catalog.searchProducts(filters);
-      const categoryById = new Map(catalog.listCategories().map((c) => [c.id, c]));
+      const rows = await catalog.searchProducts(filters);
+      const categoryById = new Map((await catalog.listCategories()).map((c) => [c.id, c]));
       res.json({
         products: rows.map((p) => serializeProduct(p, categoryById)),
       });
@@ -236,10 +251,10 @@ export function adminRoutes({ db, authService, orderService, eventBus, logger, l
     }
   });
 
-  router.patch('/products/:id/availability', requireAuth, requireCsrf, (req, res, next) => {
+  router.patch('/products/:id/availability', requireAuth, requireCsrf, async (req, res, next) => {
     try {
       const input = parseOrThrow(availabilityPatchSchema, req.body);
-      const product = catalog.findProductById(req.params.id);
+      const product = await catalog.findProductById(req.params.id);
       if (!product) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
       if (product.is_published !== 1 && input.isAvailable) {
         throw badRequest(
@@ -248,7 +263,7 @@ export function adminRoutes({ db, authService, orderService, eventBus, logger, l
         );
       }
       if (product.version !== input.version) {
-        const current = catalog.findProductById(req.params.id);
+        const current = await catalog.findProductById(req.params.id);
         return res.status(409).json({
           error: {
             code: 'STALE_VERSION',
@@ -263,8 +278,14 @@ export function adminRoutes({ db, authService, orderService, eventBus, logger, l
           requestId: req.id,
         });
       }
-      const updated = catalog.updateAvailability(req.params.id, input.isAvailable);
-      audit.record({
+      const updated = await catalog.updateAvailability(
+        req.params.id,
+        input.isAvailable,
+        input.version,
+      );
+      if (!updated)
+        throw conflict('STALE_VERSION', 'Product availability was modified by another action');
+      await audit.record({
         actor: req.session.username,
         action: 'PRODUCT_AVAILABILITY_CHANGED',
         targetType: 'product',
@@ -306,16 +327,16 @@ export function adminRoutes({ db, authService, orderService, eventBus, logger, l
     }
   });
 
-  router.get('/menu-config', requireAuth, (req, res, next) => {
+  router.get('/menu-config', requireAuth, async (req, res, next) => {
     try {
       res.json({
-        categories: catalog.listCategories().map((category) => ({
+        categories: (await catalog.listCategories()).map((category) => ({
           id: category.id,
           nameEn: category.name_en,
           nameFil: category.name_fil,
           sortOrder: category.sort_order,
         })),
-        addons: catalog.listAddons().map((addon) => ({
+        addons: (await catalog.listAddons()).map((addon) => ({
           id: addon.id,
           nameEn: addon.name_en,
           nameFil: addon.name_fil,
@@ -327,24 +348,24 @@ export function adminRoutes({ db, authService, orderService, eventBus, logger, l
     }
   });
 
-  router.post('/products', requireAuth, requireCsrf, (req, res, next) => {
+  router.post('/products', requireAuth, requireCsrf, async (req, res, next) => {
     try {
       const input = parseOrThrow(createProductSchema, req.body);
-      if (catalog.findProductById(input.sku)) {
+      if (await catalog.findProductById(input.sku)) {
         throw conflict('PRODUCT_EXISTS', 'A product with this SKU already exists');
       }
-      if (!catalog.listCategories().some((category) => category.id === input.categoryId)) {
+      if (!(await catalog.listCategories()).some((category) => category.id === input.categoryId)) {
         throw badRequest('CATEGORY_NOT_FOUND', 'Choose an existing category');
       }
-      const addonIds = new Set(catalog.listAddons().map((addon) => addon.id));
+      const addonIds = new Set((await catalog.listAddons()).map((addon) => addon.id));
       const unknownAddon = input.addonIds.find((addonId) => !addonIds.has(addonId));
       if (unknownAddon) throw badRequest('ADDON_NOT_FOUND', 'Choose existing add-ons only');
 
-      const product = catalog.createProduct(input);
+      const product = await catalog.createProduct(input);
       const categoryById = new Map(
-        catalog.listCategories().map((category) => [category.id, category]),
+        (await catalog.listCategories()).map((category) => [category.id, category]),
       );
-      audit.record({
+      await audit.record({
         actor: req.session.username,
         action: 'PRODUCT_CREATED',
         targetType: 'product',
@@ -368,10 +389,10 @@ export function adminRoutes({ db, authService, orderService, eventBus, logger, l
     }
   });
 
-  router.patch('/products/:id/publication', requireAuth, requireCsrf, (req, res, next) => {
+  router.patch('/products/:id/publication', requireAuth, requireCsrf, async (req, res, next) => {
     try {
       const input = parseOrThrow(publicationPatchSchema, req.body);
-      const product = catalog.findProductById(req.params.id);
+      const product = await catalog.findProductById(req.params.id);
       if (!product) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
       if (product.version !== input.version) {
         return res.status(409).json({
@@ -386,8 +407,9 @@ export function adminRoutes({ db, authService, orderService, eventBus, logger, l
           requestId: req.id,
         });
       }
-      const updated = catalog.updatePublication(req.params.id, input);
-      audit.record({
+      const updated = await catalog.updatePublication(req.params.id, input, input.version);
+      if (!updated) throw conflict('STALE_VERSION', 'Product state was modified by another action');
+      await audit.record({
         actor: req.session.username,
         action: 'PRODUCT_PUBLICATION_CHANGED',
         targetType: 'product',
@@ -407,7 +429,7 @@ export function adminRoutes({ db, authService, orderService, eventBus, logger, l
         userAgent: req.get('User-Agent'),
       });
       const categoryById = new Map(
-        catalog.listCategories().map((category) => [category.id, category]),
+        (await catalog.listCategories()).map((category) => [category.id, category]),
       );
       eventBus.publish({
         type: EVENT_TYPES.CATALOG_CHANGED,
@@ -420,9 +442,9 @@ export function adminRoutes({ db, authService, orderService, eventBus, logger, l
   });
 
   // --- Daily summary ---------------------------------------------------------
-  router.get('/summary', requireAuth, (req, res, next) => {
+  router.get('/summary', requireAuth, async (req, res, next) => {
     try {
-      const summary = buildDailySummary(db);
+      const summary = await buildDailySummary(db, undefined, orders);
       res.json({
         summary,
         connection: {
@@ -437,10 +459,10 @@ export function adminRoutes({ db, authService, orderService, eventBus, logger, l
   });
 
   // --- Audit and statement of account --------------------------------------
-  router.get('/audit-events', requireAuth, (req, res, next) => {
+  router.get('/audit-events', requireAuth, async (req, res, next) => {
     try {
       const query = parseOrThrow(auditLogQuerySchema, req.query);
-      const events = audit.list(query).map((event) => ({
+      const events = (await audit.list(query)).map((event) => ({
         id: event.id,
         actor: event.actor,
         actorRole: event.actor_role,
@@ -457,10 +479,10 @@ export function adminRoutes({ db, authService, orderService, eventBus, logger, l
     }
   });
 
-  router.get('/reports/summary', requireAuth, (req, res, next) => {
+  router.get('/reports/summary', requireAuth, async (req, res, next) => {
     try {
       const range = parseOrThrow(reportQuerySchema, req.query);
-      res.json({ summary: buildSoaSummary(orders.listForReport(range), range) });
+      res.json({ summary: buildSoaSummary(await orders.listForReport(range), range) });
     } catch (err) {
       next(err);
     }
@@ -469,15 +491,15 @@ export function adminRoutes({ db, authService, orderService, eventBus, logger, l
   router.get('/reports/soa.xlsx', requireAuth, async (req, res, next) => {
     try {
       const range = parseOrThrow(reportQuerySchema, req.query);
-      const reportOrders = orders.listForReport(range);
+      const reportOrders = await orders.listForReport(range);
       const summary = buildSoaSummary(reportOrders, range);
       const workbook = await createSoaWorkbook({
         summary,
         orders: reportOrders,
-        items: orders.itemsForReport(range),
+        items: await orders.itemsForReport(range),
         generatedBy: req.session.username,
       });
-      audit.record({
+      await audit.record({
         actor: req.session.username,
         action: 'SOA_EXPORTED',
         targetType: 'report',
