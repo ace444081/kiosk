@@ -25,7 +25,7 @@ export class ApiError extends Error {
   }
 }
 
-async function request(path, { method = 'GET', body, headers = {}, csrfToken } = {}) {
+async function request(path, { method = 'GET', body, headers = {}, csrfToken, staffStation } = {}) {
   let response;
   try {
     response = await fetch(`/api/v1${path}`, {
@@ -33,6 +33,7 @@ async function request(path, { method = 'GET', body, headers = {}, csrfToken } =
       headers: {
         ...(body ? { 'Content-Type': 'application/json' } : {}),
         ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+        ...(staffStation ? { 'X-Staff-Station': staffStation } : {}),
         ...headers,
       },
       body: body ? JSON.stringify(body) : undefined,

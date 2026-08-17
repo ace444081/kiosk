@@ -1,18 +1,20 @@
 import { useEffect, useState } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { fetchStaffSession, staffLogout } from '../services/admin-api.js';
+import { fetchStaffSession, getStaffStation, staffLogout } from '../services/admin-api.js';
 
 export function StaffShell() {
   const [session, setSession] = useState(null);
   const [ready, setReady] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const routeStation = location.pathname.split('/')[2] || 'launcher';
+  const sessionStation = getStaffStation(routeStation);
   useEffect(() => {
-    fetchStaffSession()
+    fetchStaffSession(sessionStation)
       .then(setSession)
       .catch(() => setSession(null))
       .finally(() => setReady(true));
-  }, []);
+  }, [sessionStation]);
   if (!ready)
     return (
       <main className="station-loading">
@@ -20,13 +22,15 @@ export function StaffShell() {
         <p>Opening station…</p>
       </main>
     );
-  if (!session) return <Navigate to="/staff/login" replace />;
+  if (!session) {
+    return <Navigate to={`/staff/login?station=${encodeURIComponent(routeStation)}`} replace />;
+  }
   const station = location.pathname.split('/')[2] || '';
   if (session.role !== 'admin' && station && session.role !== station) {
     return <Navigate to={`/staff/${session.role}`} replace />;
   }
   const logout = async () => {
-    await staffLogout();
+    await staffLogout(sessionStation);
     navigate('/staff/login', { replace: true });
   };
   return <Outlet context={{ session, logout }} />;

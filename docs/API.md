@@ -165,6 +165,10 @@ session CSRF token and current order `version`.
 | PATCH  | `/api/v1/staff/orders/:id/status`  | Station owner, admin | Role-checked workflow transition                              |
 | GET    | `/api/v1/staff/events`             | Any staff            | Refresh-only live event stream                                |
 
+Staff station requests may send `X-Staff-Station: launcher|cashier|kitchen|serving`.
+The server keeps separate station cookies so multiple station tabs in one
+browser do not overwrite each other's CSRF session.
+
 Public customer-display endpoints expose no items, totals, payment details, or
 staff identity:
 

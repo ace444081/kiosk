@@ -140,9 +140,25 @@ export function createApp({ env, db, logger = createLogger(env.logLevel) }) {
       audit,
     }),
   );
+  const staffSessionNames = ['launcher', 'cashier', 'kitchen', 'serving'];
+  const staffSessions = new Map(
+    staffSessionNames.map((station) => [
+      station,
+      createSessionMiddleware(`sgkiosk.staff.${station}.sid`),
+    ]),
+  );
+  app.use('/api/v1/staff', (req, res, next) => {
+    const cookieHeader = req.get('Cookie') || '';
+    const cookieStation = staffSessionNames.find((station) =>
+      cookieHeader.includes(`sgkiosk.staff.${station}.sid=`),
+    );
+    const requestedStation =
+      req.get('X-Staff-Station') || req.query.station || cookieStation || 'launcher';
+    const stationSession = staffSessions.get(requestedStation) || staffSessions.get('launcher');
+    return stationSession(req, res, next);
+  });
   app.use(
     '/api/v1/staff',
-    createSessionMiddleware('sgkiosk.staff.sid'),
     staffRoutes({ db, authService, orderService, eventBus, logger, loginLimit, orders, admins }),
   );
 

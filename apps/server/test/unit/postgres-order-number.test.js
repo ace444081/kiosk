@@ -17,5 +17,6 @@ describe('PostgreSQL daily order sequence', () => {
     expect(result.orderNumber).toMatch(/-042$/);
     expect(calls).toHaveLength(1);
     expect(calls[0].sql).toContain('ON CONFLICT');
+    expect(calls[0].sql).toContain('MAX(daily_sequence)');
   });
 });

@@ -2,6 +2,28 @@ import { ApiError, api } from './api.js';
 
 /** Admin session helpers. CSRF token lives only in memory (never persisted). */
 let csrfToken = null;
+const STAFF_STATION_STORAGE_KEY = 'sgkiosk.staff.station';
+const STAFF_STATIONS = new Set(['launcher', 'cashier', 'kitchen', 'serving']);
+
+export function getStaffStation(fallback = 'launcher') {
+  try {
+    const stored = sessionStorage.getItem(STAFF_STATION_STORAGE_KEY);
+    if (STAFF_STATIONS.has(stored)) return stored;
+  } catch {
+    // Continue with the route-derived fallback when storage is unavailable.
+  }
+  return STAFF_STATIONS.has(fallback) ? fallback : 'launcher';
+}
+
+function setStaffStation(station) {
+  const value = STAFF_STATIONS.has(station) ? station : 'launcher';
+  try {
+    sessionStorage.setItem(STAFF_STATION_STORAGE_KEY, value);
+  } catch {
+    // The in-memory request path still carries the station key.
+  }
+  return value;
+}
 
 export async function fetchAdminSession() {
   const payload = await api.get('/admin/session');
@@ -15,28 +37,37 @@ export async function adminLogin(username, password) {
   return payload;
 }
 
-export async function staffLogin(username, password) {
-  const payload = await api.post('/staff/session', { username, password });
+export async function staffLogin(username, password, station = 'launcher') {
+  const staffStation = setStaffStation(station);
+  const payload = await api.post('/staff/session', { username, password }, { staffStation });
   csrfToken = payload.csrfToken;
   return payload;
 }
 
-export async function fetchStaffSession() {
-  const payload = await api.get('/staff/session');
+export async function fetchStaffSession(station = getStaffStation()) {
+  const staffStation = getStaffStation(station);
+  const payload = await api.get('/staff/session', { staffStation });
   csrfToken = payload.csrfToken;
   return payload;
 }
 
-export async function staffLogout() {
+export async function staffLogout(station = getStaffStation()) {
   try {
-    await api.delete('/staff/session');
+    await api.delete('/staff/session', { staffStation: getStaffStation(station) });
   } finally {
     csrfToken = null;
   }
 }
 
-export async function staffPatch(path, body) {
-  return api.patch(`/staff${path}`, body, { csrfToken: getCsrfToken() });
+export async function staffPatch(path, body, station = getStaffStation()) {
+  return api.patch(`/staff${path}`, body, {
+    csrfToken: getCsrfToken(),
+    staffStation: getStaffStation(station),
+  });
+}
+
+export async function staffGet(path, station) {
+  return api.get(path, { staffStation: getStaffStation(station) });
 }
 
 export async function adminLogout() {

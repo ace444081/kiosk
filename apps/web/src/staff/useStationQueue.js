@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ADMIN_POLL_MS } from '@kiosk/shared';
-import { api } from '../services/api.js';
+import { staffGet } from '../services/admin-api.js';
 
 export function useStationQueue(station, page = 1) {
   const [orders, setOrders] = useState([]);
@@ -12,7 +12,7 @@ export function useStationQueue(station, page = 1) {
 
   const refresh = useCallback(async () => {
     try {
-      const payload = await api.get(`/staff/queue/${station}?page=${page}`);
+      const payload = await staffGet(`/staff/queue/${station}?page=${page}`, station);
       setOrders(payload.orders);
       setPagination(payload.pagination);
       setError(null);
@@ -35,7 +35,7 @@ export function useStationQueue(station, page = 1) {
       if (!poll) poll = setInterval(() => refreshRef.current(), ADMIN_POLL_MS);
     };
     try {
-      source = new EventSource('/api/v1/staff/events');
+      source = new EventSource(`/api/v1/staff/events?station=${encodeURIComponent(station)}`);
       source.onopen = () => {
         setConnection('live');
         if (poll) clearInterval(poll);
@@ -54,7 +54,7 @@ export function useStationQueue(station, page = 1) {
       source?.close();
       if (poll) clearInterval(poll);
     };
-  }, [refresh]);
+  }, [refresh, station]);
 
   return { orders, pagination, connection, loading, error, refresh };
 }

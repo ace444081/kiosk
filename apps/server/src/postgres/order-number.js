@@ -6,9 +6,15 @@ export async function allocatePostgresOrderNumber(db) {
   const businessDate = DateTime.now().setZone(BUSINESS_TIMEZONE).toFormat('yyyy-MM-dd');
   const row = await db.one(
     `INSERT INTO daily_order_sequences (business_date, last_value)
-     VALUES ($1::date, 1)
+     VALUES (
+       $1::date,
+       COALESCE((SELECT MAX(daily_sequence) FROM orders WHERE business_date = $1::date), 0) + 1
+     )
      ON CONFLICT (business_date)
-     DO UPDATE SET last_value = daily_order_sequences.last_value + 1
+     DO UPDATE SET last_value = GREATEST(
+       daily_order_sequences.last_value + 1,
+       COALESCE((SELECT MAX(daily_sequence) FROM orders WHERE business_date = $1::date), 0) + 1
+     )
      RETURNING last_value`,
     [businessDate],
   );

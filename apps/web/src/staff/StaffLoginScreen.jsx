@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError } from '../services/api.js';
 import { staffLogin } from '../services/admin-api.js';
 
@@ -7,6 +7,8 @@ const destination = (role) => (role === 'admin' ? '/staff' : `/staff/${role}`);
 
 export function StaffLoginScreen() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const station = searchParams.get('station') || 'launcher';
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -17,7 +19,7 @@ export function StaffLoginScreen() {
     setBusy(true);
     setError('');
     try {
-      const session = await staffLogin(username, password);
+      const session = await staffLogin(username, password, station);
       navigate(destination(session.role), { replace: true });
     } catch (err) {
       setError(

@@ -18,10 +18,10 @@ describe('role-based station workflow', () => {
   const key = () => `station-${Math.random().toString(36).slice(2, 16)}`;
   const login = async (role) => {
     const agent = request.agent(ctx.app);
-    const response = await agent.post('/api/v1/staff/session').send({
-      username: role,
-      password: `${role}-pass-123`,
-    });
+    const response = await agent
+      .post('/api/v1/staff/session')
+      .set('X-Staff-Station', role)
+      .send({ username: role, password: `${role}-pass-123` });
     expect(response.status).toBe(200);
     expect(response.body.role).toBe(role);
     return { agent, csrf: response.body.csrfToken };
@@ -103,13 +103,36 @@ describe('role-based station workflow', () => {
     expect(adminLogin.status).toBe(200);
     const staffLogin = await agent
       .post('/api/v1/staff/session')
+      .set('X-Staff-Station', 'kitchen')
       .send({ username: 'kitchen', password: 'kitchen-pass-123' });
     expect(staffLogin.status).toBe(200);
-    expect(staffLogin.headers['set-cookie'].join(';')).toContain('sgkiosk.staff.sid=');
+    expect(staffLogin.headers['set-cookie'].join(';')).toContain('sgkiosk.staff.kitchen.sid=');
     const adminSession = await agent.get('/api/v1/admin/session');
-    const staffSession = await agent.get('/api/v1/staff/session');
+    const staffSession = await agent.get('/api/v1/staff/session').set('X-Staff-Station', 'kitchen');
     expect(adminSession.body.role).toBe('admin');
     expect(staffSession.body.role).toBe('kitchen');
+  });
+
+  it('keeps separate station sessions when the same browser uses multiple tabs', async () => {
+    const agent = request.agent(ctx.app);
+    const servingLogin = await agent
+      .post('/api/v1/staff/session')
+      .set('X-Staff-Station', 'serving')
+      .send({ username: 'serving', password: 'serving-pass-123' });
+    const kitchenLogin = await agent
+      .post('/api/v1/staff/session')
+      .set('X-Staff-Station', 'kitchen')
+      .send({ username: 'kitchen', password: 'kitchen-pass-123' });
+
+    expect(servingLogin.status).toBe(200);
+    expect(kitchenLogin.status).toBe(200);
+    expect(servingLogin.body.csrfToken).not.toBe(kitchenLogin.body.csrfToken);
+    expect(
+      (await agent.get('/api/v1/staff/session').set('X-Staff-Station', 'serving')).body.role,
+    ).toBe('serving');
+    expect(
+      (await agent.get('/api/v1/staff/session').set('X-Staff-Station', 'kitchen')).body.role,
+    ).toBe('kitchen');
   });
 
   it('enforces station roles even for manually called APIs', async () => {
