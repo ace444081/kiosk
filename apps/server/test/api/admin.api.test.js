@@ -497,6 +497,12 @@ describe('admin API - auth, CSRF, rate limiting, workflow, summary', () => {
         summary.body.summary.completedCashCentavos + summary.body.summary.completedDemoCentavos,
       );
 
+      const analytics = await agent.get(`/api/v1/admin/analytics?from=${date}&to=${date}`);
+      expect(analytics.status).toBe(200);
+      expect(analytics.body.analytics.summary.completedOrders).toBeGreaterThanOrEqual(2);
+      expect(analytics.body.analytics.daily[0].businessDate).toBe(date);
+      expect(analytics.body.analytics.serviceTimes.sampleCount).toBeGreaterThanOrEqual(2);
+
       const exported = await agent
         .get(`/api/v1/admin/reports/soa.xlsx?from=${date}&to=${date}`)
         .buffer(true)
@@ -510,7 +516,7 @@ describe('admin API - auth, CSRF, rate limiting, workflow, summary', () => {
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       );
       expect(exported.headers['content-disposition']).toContain(
-        `sweet-gonz-soa-${date}-to-${date}.xlsx`,
+        `sweet-gonz-operations-${date}-to-${date}.xlsx`,
       );
       expect(exported.body.subarray(0, 2).toString()).toBe('PK');
 

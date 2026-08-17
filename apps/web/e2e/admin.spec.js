@@ -32,7 +32,9 @@ test.describe('admin console', () => {
     await page.context().clearCookies();
 
     await adminLogin(page);
-    await expect(page.getByText(/Today.s Summary|Buod ngayong Araw/)).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /Operations and Sales|Operasyon at Benta/ }),
+    ).toBeVisible();
     // Shared test DB: assert relative (at least) rather than exact counts.
     const totalOrders = await page
       .locator('.stat-card', { hasText: 'Total orders' })

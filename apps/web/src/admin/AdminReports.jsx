@@ -3,9 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { formatPeso } from '@kiosk/shared';
 import { api } from '../services/api.js';
 import { adminDownload } from '../services/admin-api.js';
+import { manilaDate } from '../utils/date-range.js';
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  return manilaDate();
 }
 
 export function AdminReports() {
@@ -39,7 +40,7 @@ export function AdminReports() {
       const link = document.createElement('a');
       const url = URL.createObjectURL(result.blob);
       link.href = url;
-      link.download = result.filename || `sweet-gonz-soa-${from}-to-${to}.xlsx`;
+      link.download = result.filename || `sweet-gonz-operations-${from}-to-${to}.xlsx`;
       document.body.append(link);
       link.click();
       link.remove();
@@ -82,7 +83,7 @@ export function AdminReports() {
           disabled={!summary || downloading || from > to}
           onClick={download}
         >
-          {downloading ? t('admin.preparingExport') : t('admin.downloadSoa')}
+          {downloading ? t('admin.preparingExport') : t('admin.exportOperations')}
         </button>
       </section>
       {from > to && (

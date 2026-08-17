@@ -3,7 +3,7 @@
 ## 1. Roles and access
 
 - The admin console is for **staff only**.
-- Accounts are created with the command line (see §9); there are **no
+- Accounts are created with the command line (see §10); there are **no
   default credentials**.
 - The console is protected by username/password, a server-side session
   (30-minute inactivity timeout, 8-hour absolute timeout), and CSRF
@@ -21,15 +21,21 @@
 
 ## 3. Dashboard
 
-Shows **today's** numbers (business date = Asia/Manila):
+The Operations and Sales dashboard supports Today, Yesterday, the last 7 days,
+the last 30 days, or a custom business-date range. Business dates use
+Asia/Manila.
 
-- **Total orders**, **Pending cash** (orders still awaiting cash),
-- **Placed / Preparing / Ready / Completed / Cancelled** counts,
-- **Completed sales** — only completed orders with confirmed payment;
-  cash and demo e-wallet amounts are shown separately, and **demo amounts
-  are simulated** (pilot only).
+- **Real cash sales**, completed orders, average order value, pending cash,
+  and simulated demo-wallet totals are shown separately.
+- Workflow mix shows **Placed / Preparing / Ready / Completed / Cancelled**.
+- Daily activity, top products, service times, and active exceptions support
+  the owner review.
+- The live queue remains current even when the selected reporting period is
+  historical.
+- **Export operations (.xlsx)** downloads a workbook for the selected range.
 
-The connection pill shows **Live** (SSE), **Polling**, or **Disconnected**.
+If a period has no orders, use the latest-activity shortcut or choose a wider
+range. The connection pill shows **Live**, **Polling**, or **Disconnected**.
 
 ## 4. Order queue
 
@@ -77,7 +83,24 @@ Open an order to see all items, add-ons, choices, and totals.
 - The **Updated** timestamp helps staff know when availability last
   changed.
 
-## 7. What staff CANNOT do in this version
+## 7. Operations workbook
+
+The dashboard export is a formatted workbook with these sheets:
+
+- Overview and Statement of Account
+- Daily Summary
+- Orders and Order Items, including captured customizations
+- Product Performance
+- Service Times
+- Menu Status
+- Audit Log
+- Data Dictionary
+
+Real cash and simulated demo-wallet amounts are deliberately separated. The
+workbook contains operational order data only and does not include passwords,
+session data, customer names, or contact fields.
+
+## 8. What staff CANNOT do in this version
 
 - Edit prices, names, categories, or add-ons (by design — ask the
   operator).
@@ -86,7 +109,7 @@ Open an order to see all items, add-ons, choices, and totals.
   cannot restore).
 - Access anything outside the local network.
 
-## 8. Daily routine
+## 9. Daily routine
 
 1. Morning: open the dashboard; check the server pill is **Live**.
 2. During service: watch the order queue; confirm cash when customers pay;
@@ -95,7 +118,7 @@ Open an order to see all items, add-ons, choices, and totals.
 4. End of day: review **Completed sales** (note: demo amounts are
    simulated); run a backup (see below).
 
-## 9. Operator tasks (PowerShell)
+## 10. Operator tasks (PowerShell)
 
 ```powershell
 cd <project-root>
@@ -133,7 +156,7 @@ taskkill /F /PID <pid>
 #   confirming no server is running.
 ```
 
-## 10. Troubleshooting (staff/operator)
+## 11. Troubleshooting (staff/operator)
 
 | Symptom                                      | Action                                                                                       |
 | -------------------------------------------- | -------------------------------------------------------------------------------------------- |

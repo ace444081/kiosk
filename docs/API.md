@@ -263,6 +263,13 @@ Body: `{ "isAvailable": false, "version": 1 }`
 Only completed orders with `cash_received` or `demo_confirmed` count toward
 completed sales. Demo amounts are simulated.
 
+### `GET /api/v1/admin/analytics?from=YYYY-MM-DD&to=YYYY-MM-DD`
+
+Returns the selected business-date range for the Operations and Sales
+dashboard. The response includes the period summary, daily activity, workflow
+mix, payment mix, top products, service-time averages, and data coverage.
+Real cash and simulated demo-wallet amounts are separate fields.
+
 ### `GET /api/v1/admin/events`
 
 Server-sent events (`text/event-stream`). Replays the recent backlog on

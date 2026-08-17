@@ -21,11 +21,13 @@ import {
   requireRoles,
 } from '../middleware/auth.js';
 import { buildDailySummary } from '../domain/summary.js';
+import { buildDashboardAnalytics } from '../services/dashboard-analytics.js';
+import { createOperationsWorkbook } from '../services/operations-workbook.js';
 import { CatalogRepository } from '../repositories/catalog.js';
 import { OrderRepository } from '../repositories/orders.js';
 import { AuditRepository } from '../repositories/audit.js';
 import { EVENT_TYPES } from '../events/event-types.js';
-import { buildSoaSummary, createSoaWorkbook } from '../services/soa-report.js';
+import { buildSoaSummary } from '../services/soa-report.js';
 
 function parseOrThrow(schema, data) {
   const parsed = schema.safeParse(data);
@@ -458,6 +460,31 @@ export function adminRoutes({
     }
   });
 
+  router.get('/analytics', requireAuth, async (req, res, next) => {
+    try {
+      const range = parseOrThrow(reportQuerySchema, req.query);
+      const [reportOrders, reportItems] = await Promise.all([
+        orders.listForReport(range),
+        orders.itemsForReport(range),
+      ]);
+      const analytics = buildDashboardAnalytics({
+        orders: reportOrders,
+        items: reportItems,
+        ...range,
+      });
+      res.json({
+        analytics,
+        connection: {
+          status: 'ok',
+          serverTime: new Date().toISOString(),
+          db: 'ok',
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   // --- Audit and statement of account --------------------------------------
   router.get('/audit-events', requireAuth, async (req, res, next) => {
     try {
@@ -492,11 +519,24 @@ export function adminRoutes({
     try {
       const range = parseOrThrow(reportQuerySchema, req.query);
       const reportOrders = await orders.listForReport(range);
+      const reportItems = await orders.itemsForReport(range);
       const summary = buildSoaSummary(reportOrders, range);
-      const workbook = await createSoaWorkbook({
-        summary,
+      const analytics = buildDashboardAnalytics({
         orders: reportOrders,
-        items: await orders.itemsForReport(range),
+        items: reportItems,
+        ...range,
+      });
+      const [auditEvents, catalogProducts] = await Promise.all([
+        audit.list({ from: range.from, to: range.to, limit: 500 }),
+        catalog.listProducts({ publishedOnly: false }),
+      ]);
+      const workbook = await createOperationsWorkbook({
+        summary,
+        analytics,
+        orders: reportOrders,
+        items: reportItems,
+        auditEvents,
+        catalog: catalogProducts,
         generatedBy: req.session.username,
       });
       await audit.record({
@@ -509,7 +549,7 @@ export function adminRoutes({
         ip: req.ip,
         userAgent: req.get('User-Agent'),
       });
-      const filename = `sweet-gonz-soa-${range.from}-to-${range.to}.xlsx`;
+      const filename = `sweet-gonz-operations-${range.from}-to-${range.to}.xlsx`;
       res.setHeader(
         'Content-Type',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

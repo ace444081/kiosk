@@ -122,7 +122,17 @@ export class OrderRepository {
     return this.db
       .prepare(
         `SELECT o.order_number, o.business_date, o.status, o.payment_method, o.payment_status,
-                oi.product_sku, oi.product_name, oi.unit_price_centavos, oi.quantity, oi.line_total_centavos
+                o.created_at, o.payment_confirmed_at, o.preparing_at, o.ready_at, o.completed_at,
+                oi.order_id, oi.product_sku, oi.product_name, oi.unit_price_centavos, oi.quantity,
+                oi.line_total_centavos,
+                COALESCE((SELECT group_concat(addon_name, ', ')
+                          FROM order_item_addons WHERE order_item_id = oi.id), '') AS addons,
+                COALESCE((SELECT group_concat(option_name, ', ')
+                          FROM order_item_options WHERE order_item_id = oi.id), '') AS options,
+                COALESCE((SELECT SUM(addon_price_centavos)
+                          FROM order_item_addons WHERE order_item_id = oi.id), 0)
+                + COALESCE((SELECT SUM(option_price_centavos)
+                          FROM order_item_options WHERE order_item_id = oi.id), 0) AS customization_centavos
          FROM order_items oi
          JOIN orders o ON o.id = oi.order_id
          WHERE o.business_date BETWEEN ? AND ?

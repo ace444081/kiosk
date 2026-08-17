@@ -1,7 +1,10 @@
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { formatPeso } from '@kiosk/shared';
+import { adminDownload } from '../services/admin-api.js';
 import { useAdminLive } from '../hooks/useAdminLive.js';
+import { formatBusinessDate, manilaDate, presetRange } from '../utils/date-range.js';
 import {
   getOrderTimerState,
   isOrderTimerActive,
@@ -24,6 +27,20 @@ function ConnectionPill({ connection }) {
   );
 }
 
+function MetricCard({ label, value, note, tone = '' }) {
+  return (
+    <div className={`stat-card dashboard-metric-card ${tone}`}>
+      <div className="stat-label">{label}</div>
+      <div className="stat-value">{value}</div>
+      {note && <div className="stat-note">{note}</div>}
+    </div>
+  );
+}
+
+function formatMinutes(value) {
+  return value == null ? 'N/A' : `${Number(value).toFixed(1)} min`;
+}
+
 function orderPriority(order) {
   if (order.status === 'placed' && order.paymentStatus === 'pending_cash') return 0;
   if (order.status === 'preparing') return 1;
@@ -33,25 +50,292 @@ function orderPriority(order) {
   return 5;
 }
 
+function PeriodControls({
+  from,
+  to,
+  preset,
+  onPreset,
+  onFrom,
+  onTo,
+  onExport,
+  downloading,
+  invalid,
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="dashboard-controls" aria-label={t('admin.periodControls')}>
+      <label>
+        <span>{t('admin.period')}</span>
+        <select value={preset} onChange={(event) => onPreset(event.target.value)}>
+          <option value="today">{t('admin.rangeToday')}</option>
+          <option value="yesterday">{t('admin.rangeYesterday')}</option>
+          <option value="last7">{t('admin.rangeLast7')}</option>
+          <option value="last30">{t('admin.rangeLast30')}</option>
+          <option value="custom">{t('admin.rangeCustom')}</option>
+        </select>
+      </label>
+      <label>
+        <span>{t('admin.fromDate')}</span>
+        <input type="date" value={from} onChange={(event) => onFrom(event.target.value)} />
+      </label>
+      <label>
+        <span>{t('admin.toDate')}</span>
+        <input type="date" value={to} min={from} onChange={(event) => onTo(event.target.value)} />
+      </label>
+      <button
+        type="button"
+        className="btn btn-primary dashboard-export-button"
+        disabled={invalid || downloading}
+        onClick={onExport}
+      >
+        {downloading ? t('admin.preparingExport') : t('admin.exportOperations')}
+      </button>
+    </div>
+  );
+}
+
+function DailyTrend({ daily }) {
+  const { t } = useTranslation();
+  const visible = daily.slice(-14);
+  const maxValue = Math.max(
+    1,
+    ...visible.map((day) => Math.max(day.realCashCentavos, day.demoCentavos)),
+  );
+  return (
+    <section className="dashboard-panel dashboard-trend-panel">
+      <div className="dashboard-panel-heading">
+        <div>
+          <p className="dashboard-section-kicker">{t('admin.movement')}</p>
+          <h2>{t('admin.dailyActivity')}</h2>
+        </div>
+        <span className="dashboard-legend">
+          <span className="legend-swatch legend-swatch-cash" /> {t('admin.cashReceived')}
+          <span className="legend-swatch legend-swatch-demo" /> {t('admin.demoWalletSimulated')}
+        </span>
+      </div>
+      {visible.some((day) => day.orders > 0) ? (
+        <div className="dashboard-trend-chart" role="img" aria-label={t('admin.dailyActivity')}>
+          {visible.map((day) => (
+            <div className="dashboard-trend-column" key={day.businessDate}>
+              <div className="dashboard-trend-bars">
+                <span
+                  className="dashboard-trend-bar dashboard-trend-bar-cash"
+                  style={{ height: `${Math.max(3, (day.realCashCentavos / maxValue) * 100)}%` }}
+                  title={`${formatBusinessDate(day.businessDate)} cash ${formatPeso(day.realCashCentavos)}`}
+                />
+                <span
+                  className="dashboard-trend-bar dashboard-trend-bar-demo"
+                  style={{ height: `${Math.max(3, (day.demoCentavos / maxValue) * 100)}%` }}
+                  title={`${formatBusinessDate(day.businessDate)} demo ${formatPeso(day.demoCentavos)}`}
+                />
+              </div>
+              <strong>{day.orders}</strong>
+              <span>{day.businessDate.slice(5)}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="dashboard-empty-panel">{t('admin.noPeriodOrders')}</div>
+      )}
+    </section>
+  );
+}
+
+function StatusBreakdown({ statusBreakdown }) {
+  const { t } = useTranslation();
+  const maxCount = Math.max(1, ...statusBreakdown.map((item) => item.count));
+  return (
+    <section className="dashboard-panel dashboard-breakdown-panel">
+      <div className="dashboard-panel-heading">
+        <div>
+          <p className="dashboard-section-kicker">{t('admin.status')}</p>
+          <h2>{t('admin.workflowMix')}</h2>
+        </div>
+      </div>
+      <div className="dashboard-status-list">
+        {statusBreakdown.map((item) => (
+          <div className="dashboard-status-row" key={item.status}>
+            <span>{t(`statuses.${item.status}`)}</span>
+            <div className="dashboard-status-track" aria-hidden="true">
+              <span style={{ width: `${(item.count / maxCount) * 100}%` }} />
+            </div>
+            <strong>{item.count}</strong>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function AttentionPanel({ orders, liveNow }) {
+  const { t } = useTranslation();
+  const attention = orders.filter((order) => {
+    if (['completed', 'cancelled'].includes(order.status)) return false;
+    const phase = getOrderTimerState(order, liveNow).phase;
+    return (
+      ['attention', 'red', 'overdue'].includes(phase) || order.paymentStatus === 'pending_cash'
+    );
+  });
+  return (
+    <section className="dashboard-panel dashboard-attention-panel">
+      <div className="dashboard-panel-heading">
+        <div>
+          <p className="dashboard-section-kicker">{t('admin.attention')}</p>
+          <h2>{t('admin.needsAttention')}</h2>
+        </div>
+        <span className={`attention-count ${attention.length ? 'has-attention' : ''}`}>
+          {attention.length}
+        </span>
+      </div>
+      {attention.length ? (
+        <div className="attention-list">
+          {attention.slice(0, 5).map((order) => (
+            <div className="attention-item" key={order.id}>
+              <div>
+                <strong>{order.orderNumber}</strong>
+                <span>
+                  {order.paymentStatus === 'pending_cash'
+                    ? t('admin.pendingCash')
+                    : t(`statuses.${order.status}`)}
+                </span>
+              </div>
+              <OrderTimer order={order} now={liveNow} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="dashboard-empty-panel">{t('admin.noAttention')}</div>
+      )}
+    </section>
+  );
+}
+
+function TopProducts({ products }) {
+  const { t } = useTranslation();
+  return (
+    <section className="dashboard-panel dashboard-products-panel">
+      <div className="dashboard-panel-heading">
+        <div>
+          <p className="dashboard-section-kicker">{t('admin.mix')}</p>
+          <h2>{t('admin.topProducts')}</h2>
+        </div>
+      </div>
+      {products.length ? (
+        <div className="dashboard-product-list">
+          {products.slice(0, 5).map((product, index) => (
+            <div className="dashboard-product-row" key={product.sku}>
+              <span className="product-rank">{String(index + 1).padStart(2, '0')}</span>
+              <div>
+                <strong>{product.name}</strong>
+                <span>
+                  {product.units} {t('admin.unitsSold')}
+                </span>
+              </div>
+              <b>{formatPeso(product.grossCentavos)}</b>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="dashboard-empty-panel">{t('admin.noPeriodOrders')}</div>
+      )}
+    </section>
+  );
+}
+
+function ServiceTimes({ serviceTimes }) {
+  const { t } = useTranslation();
+  return (
+    <section className="dashboard-panel dashboard-service-panel">
+      <div className="dashboard-panel-heading">
+        <div>
+          <p className="dashboard-section-kicker">{t('admin.quality')}</p>
+          <h2>{t('admin.serviceTimes')}</h2>
+        </div>
+        <span className="dashboard-panel-note">
+          {serviceTimes.sampleCount} {t('admin.completedOrders')}
+        </span>
+      </div>
+      <div className="dashboard-service-grid">
+        <div>
+          <span>{t('admin.paymentWait')}</span>
+          <strong>{formatMinutes(serviceTimes.paymentWaitMinutes)}</strong>
+        </div>
+        <div>
+          <span>{t('admin.prepTime')}</span>
+          <strong>{formatMinutes(serviceTimes.prepMinutes)}</strong>
+        </div>
+        <div>
+          <span>{t('admin.handoffTime')}</span>
+          <strong>{formatMinutes(serviceTimes.handoffMinutes)}</strong>
+        </div>
+        <div>
+          <span>{t('admin.totalTime')}</span>
+          <strong>{formatMinutes(serviceTimes.totalMinutes)}</strong>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function AdminDashboard() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { summary, orders, connection, error, refresh } = useAdminLive({ fetchOrders: true });
-  const activeOrders = orders?.filter(
-    (order) => !['completed', 'cancelled'].includes(order.status),
+  const today = manilaDate();
+  const initialRange = presetRange('today', today);
+  const [preset, setPreset] = useState('today');
+  const [from, setFrom] = useState(initialRange.from);
+  const [to, setTo] = useState(initialRange.to);
+  const [downloading, setDownloading] = useState(false);
+  const invalidRange = !from || !to || from > to;
+  const queryFrom = invalidRange ? today : from;
+  const queryTo = invalidRange ? today : to;
+  const { summary, analytics, orders, connection, error, refresh } = useAdminLive({
+    fetchOrders: true,
+    rangeFrom: queryFrom,
+    rangeTo: queryTo,
+  });
+  const activeOrders = useMemo(
+    () => orders?.filter((order) => !['completed', 'cancelled'].includes(order.status)) || [],
+    [orders],
   );
-  const liveNow = useOrderClock(activeOrders?.some(isOrderTimerActive));
+  const liveNow = useOrderClock(activeOrders.some(isOrderTimerActive));
 
-  const openOrder = (event, orderId) => {
-    if (event.target.closest('a, button, input, select, textarea, label')) return;
-    navigate(`/admin/orders/${orderId}`);
+  const visibleOrders = useMemo(() => {
+    const recentCompleted = (orders || [])
+      .filter((order) => order.status === 'completed')
+      .slice(0, 3);
+    return [...activeOrders, ...recentCompleted]
+      .sort(
+        (a, b) =>
+          orderPriority(a) - orderPriority(b) || new Date(b.createdAt) - new Date(a.createdAt),
+      )
+      .slice(0, 10);
+  }, [activeOrders, orders]);
+
+  const handlePreset = (nextPreset) => {
+    setPreset(nextPreset);
+    if (nextPreset !== 'custom') {
+      const range = presetRange(nextPreset, today);
+      setFrom(range.from);
+      setTo(range.to);
+    }
   };
 
-  const openOrderWithKeyboard = (event, orderId) => {
-    if (event.target.closest('a, button, input, select, textarea, label')) return;
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      navigate(`/admin/orders/${orderId}`);
+  const download = async () => {
+    if (invalidRange) return;
+    setDownloading(true);
+    try {
+      const result = await adminDownload(`/admin/reports/soa.xlsx?from=${from}&to=${to}`);
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(result.blob);
+      link.href = url;
+      link.download = result.filename || `sweet-gonz-operations-${from}-to-${to}.xlsx`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -65,91 +349,127 @@ export function AdminDashboard() {
       </div>
     );
   }
-
-  if (!summary) {
+  if (!summary || !analytics)
     return (
       <div className="empty-state">
         <p>{t('common.loading')}</p>
       </div>
     );
-  }
 
-  const stats = [
-    { label: t('admin.totalOrders'), value: summary.totalOrders },
-    { label: t('admin.pendingCash'), value: summary.pendingCash },
-    { label: t('admin.preparing'), value: summary.preparing },
-    { label: t('admin.ready'), value: summary.ready },
-  ];
-  const recentCompleted = orders?.filter((order) => order.status === 'completed').slice(0, 3) || [];
-  const visibleOrders = [...(activeOrders || []), ...recentCompleted]
-    .sort(
-      (a, b) =>
-        orderPriority(a) - orderPriority(b) || new Date(b.createdAt) - new Date(a.createdAt),
-    )
-    .slice(0, 10);
+  const periodLabel =
+    from === to
+      ? formatBusinessDate(from)
+      : `${formatBusinessDate(from)} to ${formatBusinessDate(to)}`;
+  const summaryData = analytics.summary;
 
   return (
     <div className="admin-dashboard">
-      <header className="dashboard-page-heading">
+      <header className="dashboard-page-heading dashboard-page-heading-expanded">
         <div>
-          <p className="dashboard-kicker">{t('admin.today')}</p>
-          <h1>{t('admin.summary')}</h1>
-          <p className="dashboard-date">{summary.businessDate}</p>
+          <p className="dashboard-kicker">{t('admin.operations')}</p>
+          <h1>{t('admin.operationsTitle')}</h1>
+          <p className="dashboard-date">
+            {periodLabel} · {t('admin.businessTimezone')}
+          </p>
         </div>
-        <ConnectionPill connection={connection} />
+        <div className="dashboard-header-status">
+          <ConnectionPill connection={connection} />
+          <span className="dashboard-refresh-note">{t('admin.liveQueue')}</span>
+        </div>
       </header>
 
-      <section className="dashboard-overview" aria-label={t('admin.summary')}>
-        <div className="stat-card dashboard-sales-card">
-          <div className="stat-label">{t('admin.completedSales')}</div>
-          <div className="stat-value">{formatPeso(summary.completedSalesCentavos)}</div>
-          <div className="dashboard-sales-breakdown">
-            <div>
-              <span>{t('admin.completedSalesCash')}</span>
-              <strong>{formatPeso(summary.completedSalesCashCentavos)}</strong>
-            </div>
-            <div>
-              <span>{t('admin.completedSalesDemo')}</span>
-              <strong>{formatPeso(summary.completedSalesDemoCentavos)}</strong>
-            </div>
-          </div>
-        </div>
+      <PeriodControls
+        from={from}
+        to={to}
+        preset={preset}
+        onPreset={handlePreset}
+        onFrom={(value) => {
+          setPreset('custom');
+          setFrom(value);
+        }}
+        onTo={(value) => {
+          setPreset('custom');
+          setTo(value);
+        }}
+        onExport={download}
+        downloading={downloading}
+        invalid={invalidRange}
+      />
+      {invalidRange && <div className="alert alert-danger">{t('admin.invalidDateRange')}</div>}
 
-        <div className="dashboard-kpi-grid">
-          {stats.map((stat) => (
-            <div className="stat-card dashboard-kpi-card" key={stat.label}>
-              <div className="stat-label">{stat.label}</div>
-              <div className="stat-value">{stat.value}</div>
-            </div>
-          ))}
+      {!analytics.coverage.hasData && (
+        <div className="dashboard-period-empty">
+          <strong>{t('admin.noPeriodOrders')}</strong>
+          <span>{t('admin.noPeriodOrdersHint')}</span>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => handlePreset('last30')}
+          >
+            {t('admin.viewLast30')}
+          </button>
         </div>
+      )}
+
+      <section
+        className="dashboard-overview dashboard-overview-new"
+        aria-label={t('admin.operationsTitle')}
+      >
+        <MetricCard
+          label={t('admin.realCashSales')}
+          value={formatPeso(summaryData.completedSalesCashCentavos)}
+          note={`${summaryData.completedCashOrderCount} ${t('admin.completedOrders')} | ${t('admin.completedSales')}`}
+          tone="dashboard-metric-primary"
+        />
+        <MetricCard
+          label={t('admin.totalOrders')}
+          value={summaryData.totalOrders}
+          note={t('admin.confirmedOrdersOnly')}
+        />
+        <MetricCard
+          label={t('admin.completedOrders')}
+          value={summaryData.completedOrders}
+          note={`${Math.round((summaryData.completionRate || 0) * 100)}% ${t('admin.fulfillmentRate')}`}
+        />
+        <MetricCard
+          label={t('admin.averageOrderValue')}
+          value={
+            summaryData.averageOrderValueCentavos == null
+              ? 'N/A'
+              : formatPeso(summaryData.averageOrderValueCentavos)
+          }
+          note={t('admin.confirmedOrdersOnly')}
+        />
+        <MetricCard
+          label={t('admin.pendingCash')}
+          value={summaryData.pendingCash}
+          note={`${formatPeso(summaryData.pendingCashCentavos)} ${t('admin.pendingCashValue')}`}
+          tone={summaryData.pendingCash ? 'dashboard-metric-warning' : ''}
+        />
+        <MetricCard
+          label={t('admin.demoWalletSimulated')}
+          value={formatPeso(summaryData.completedSalesDemoCentavos)}
+          note={t('admin.simulatedNote')}
+          tone="dashboard-metric-demo"
+        />
       </section>
 
-      <div className="dashboard-status-summary" aria-label={t('admin.status')}>
-        <span>
-          <strong>{summary.placed}</strong> {t('admin.placed')}
-        </span>
-        <span>
-          <strong>{summary.completed}</strong> {t('admin.completed')}
-        </span>
-        <span>
-          <strong>{summary.cancelled}</strong> {t('admin.cancelled')}
-        </span>
+      <div className="dashboard-chart-grid">
+        <DailyTrend daily={analytics.daily} />
+        <StatusBreakdown statusBreakdown={analytics.statusBreakdown} />
       </div>
 
-      <div className="simulated-note">{t('admin.simulatedNote')}</div>
-
-      <section className="dashboard-section dashboard-queue-section">
+      <section className="dashboard-live-section">
         <div className="dashboard-section-heading">
           <div>
+            <p className="dashboard-section-kicker">{t('admin.liveQueue')}</p>
             <h2>{t('admin.orders')}</h2>
             <p>{t('admin.queueIntro')}</p>
           </div>
-          <button type="button" className="btn btn-secondary" onClick={() => refresh()}>
+          <button type="button" className="btn btn-secondary" onClick={refresh}>
             {t('admin.refresh')}
           </button>
         </div>
-
         <div className="orders-table-wrap">
           <table className="orders-table">
             <thead>
@@ -176,8 +496,11 @@ export function AdminDashboard() {
                   className={`order-table-row order-age-${getOrderTimerState(order, liveNow).phase}`}
                   tabIndex={0}
                   aria-label={t('admin.openOrder', { orderNumber: order.orderNumber })}
-                  onClick={(event) => openOrder(event, order.id)}
-                  onKeyDown={(event) => openOrderWithKeyboard(event, order.id)}
+                  onClick={() => navigate(`/admin/orders/${order.id}`)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ')
+                      navigate(`/admin/orders/${order.id}`);
+                  }}
                 >
                   <td data-label={t('admin.orderNumber')}>
                     <span className="order-number-cell">{order.orderNumber}</span>
@@ -208,6 +531,13 @@ export function AdminDashboard() {
           </table>
         </div>
       </section>
+
+      <div className="dashboard-insight-grid">
+        <AttentionPanel orders={orders || []} liveNow={liveNow} />
+        <TopProducts products={analytics.topProducts} />
+        <ServiceTimes serviceTimes={analytics.serviceTimes} />
+      </div>
+      <div className="simulated-note">{t('admin.simulatedNote')}</div>
     </div>
   );
 }

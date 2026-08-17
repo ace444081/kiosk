@@ -457,8 +457,17 @@ export class PgOrderRepository {
   itemsForReport({ from, to }) {
     return this.db.many(
       `SELECT o.order_number, o.business_date, o.created_at, o.status, o.payment_method,
-              o.payment_status, oi.product_sku, oi.product_name, oi.unit_price_centavos,
-              oi.quantity, oi.line_total_centavos
+              o.payment_status, o.payment_confirmed_at, o.preparing_at, o.ready_at,
+              o.completed_at, oi.order_id, oi.product_sku, oi.product_name,
+              oi.unit_price_centavos, oi.quantity, oi.line_total_centavos,
+              COALESCE((SELECT string_agg(addon_name, ', ' ORDER BY addon_name)
+                        FROM order_item_addons WHERE order_item_id = oi.id), '') AS addons,
+              COALESCE((SELECT string_agg(option_name, ', ' ORDER BY option_name)
+                        FROM order_item_options WHERE order_item_id = oi.id), '') AS options,
+              COALESCE((SELECT SUM(addon_price_centavos)
+                        FROM order_item_addons WHERE order_item_id = oi.id), 0)
+              + COALESCE((SELECT SUM(option_price_centavos)
+                        FROM order_item_options WHERE order_item_id = oi.id), 0) AS customization_centavos
        FROM order_items oi JOIN orders o ON o.id = oi.order_id
        WHERE o.business_date BETWEEN $1::date AND $2::date
        ORDER BY o.business_date ASC, o.created_at ASC, oi.sort_order ASC`,
