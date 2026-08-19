@@ -30,7 +30,7 @@ export function AdminLayout() {
         const payload = await fetchAdminSession();
         if (!cancelled) {
           if (payload.role !== 'admin') {
-            navigate(`/staff/${payload.role}`, { replace: true });
+            navigate('/staff', { replace: true });
             return;
           }
           setUser(payload.username);
@@ -148,7 +148,7 @@ export function AdminLayout() {
             {t('admin.reports')}
           </NavLink>
           <NavLink to="/staff" className={({ isActive }) => (isActive ? 'active' : '')}>
-            Stations
+            Staff workboard
           </NavLink>
           <NavLink to="/admin/standby" className={({ isActive }) => (isActive ? 'active' : '')}>
             Cloud standby

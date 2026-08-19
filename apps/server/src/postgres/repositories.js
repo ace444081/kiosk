@@ -29,6 +29,15 @@ export class PgAdminRepository {
     return normalizeAdmin(await this.db.one('SELECT * FROM admins WHERE id = $1', [id]));
   }
 
+  async listStaff() {
+    return (
+      await this.db.many(
+        `SELECT id, username, role, is_active
+       FROM admins WHERE role = 'staff' ORDER BY LOWER(username)`,
+      )
+    ).map(normalizeAdmin);
+  }
+
   async create({ id, username, passwordHash, role = 'admin' }) {
     await this.db.query(
       'INSERT INTO admins (id, username, password_hash, role) VALUES ($1, $2, $3, $4)',
@@ -410,18 +419,25 @@ export class PgOrderRepository {
     );
   }
 
-  async listStationQueue(station, { page = 1, pageSize = 20 } = {}) {
+  async listStationQueue(
+    station,
+    { page = 1, pageSize = 20, includeRecentConfirmed = true, includeRecentCompleted = true } = {},
+  ) {
     const offset = (page - 1) * pageSize;
     let where;
     let orderBy = 'created_at ASC, daily_sequence ASC';
     if (station === 'cashier') {
-      where = `(status = 'placed' AND payment_status = 'pending_cash')
-        OR (payment_method = 'cash' AND payment_status = 'cash_received'
-            AND updated_at >= CURRENT_TIMESTAMP - INTERVAL '10 seconds')`;
+      where = includeRecentConfirmed
+        ? `(status = 'placed' AND payment_status = 'pending_cash')
+          OR (payment_method = 'cash' AND payment_status = 'cash_received'
+              AND updated_at >= CURRENT_TIMESTAMP - INTERVAL '10 seconds')`
+        : `(status = 'placed' AND payment_status = 'pending_cash')`;
     } else if (station === 'kitchen') {
       where = `(status = 'placed' AND payment_status IN ('cash_received','demo_confirmed')) OR status = 'preparing'`;
     } else {
-      where = `status = 'ready' OR (status = 'completed' AND completed_at >= CURRENT_TIMESTAMP - INTERVAL '60 seconds')`;
+      where = includeRecentCompleted
+        ? `status = 'ready' OR (status = 'completed' AND completed_at >= CURRENT_TIMESTAMP - INTERVAL '60 seconds')`
+        : `status = 'ready'`;
       orderBy = `CASE status WHEN 'ready' THEN 0 ELSE 1 END, COALESCE(ready_at, created_at) ASC`;
     }
     const count = await this.db.one(`SELECT COUNT(*)::int AS n FROM orders WHERE ${where}`);
@@ -642,12 +658,12 @@ export class PgOrderRepository {
     );
   }
 
-  async updatePaymentStatus(id, paymentStatus, paymentConfirmedAt, version) {
+  async updatePaymentStatus(id, paymentStatus, paymentConfirmedAt, paymentConfirmedBy, version) {
     return this.db.one(
       `UPDATE orders SET payment_status = $1, payment_confirmed_at = $2,
-         version = version + 1, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $3 AND version = $4 RETURNING *`,
-      [paymentStatus, paymentConfirmedAt, id, version],
+         payment_confirmed_by = $3, version = version + 1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $4 AND version = $5 RETURNING *`,
+      [paymentStatus, paymentConfirmedAt, paymentConfirmedBy, id, version],
     );
   }
 }

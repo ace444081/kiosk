@@ -8,6 +8,7 @@ import './styles/global.css';
 import './styles/kiosk.css';
 import './styles/admin.css';
 import './styles/staff.css';
+import './styles/premium-light.css';
 import './styles/print.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(

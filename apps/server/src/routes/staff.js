@@ -43,6 +43,7 @@ async function stationOrder(orderService, orders, row, station, details) {
     version: full.version,
     createdAt: full.createdAt,
     updatedAt: full.updatedAt,
+    paymentConfirmedAt: full.paymentConfirmedAt,
     preparingAt: full.preparingAt,
     readyAt: full.readyAt,
     completedAt: full.completedAt,
@@ -104,7 +105,8 @@ export function staffRoutes({
         ip: req.ip,
         userAgent: req.get('User-Agent'),
       });
-      res.clearCookie('sgkiosk.staff.sid');
+      const station = req.get('X-Staff-Station') || req.query.station || 'launcher';
+      res.clearCookie(`sgkiosk.staff.${station}.sid`);
       res.status(204).end();
     } catch (error) {
       next(error);
@@ -113,16 +115,52 @@ export function staffRoutes({
 
   router.use(requireAuth, resolveStaff(adminsOverride || db));
 
+  router.get('/workboard', async (req, res, next) => {
+    try {
+      const page = Math.max(1, Number.parseInt(req.query.page || '1', 10) || 1);
+      const lanes = [
+        ['payment', 'cashier'],
+        ['preparation', 'kitchen'],
+        ['handoff', 'serving'],
+      ];
+      const queues = await Promise.all(
+        lanes.map(async ([lane, station]) => [
+          lane,
+          station,
+          await orders.listStationQueue(station, {
+            page,
+            pageSize: 20,
+            includeRecentConfirmed: lane !== 'payment',
+            includeRecentCompleted: lane !== 'handoff',
+          }),
+        ]),
+      );
+      const allIds = queues.flatMap(([, , queue]) => queue.rows.map((row) => row.id));
+      const details = orders.detailMany ? await orders.detailMany(allIds) : null;
+      const payload = {};
+      for (const [lane, station, queue] of queues) {
+        payload[lane] = {
+          orders: await Promise.all(
+            queue.rows.map((row) => stationOrder(orderService, orders, row, station, details)),
+          ),
+          pagination: {
+            page: queue.page,
+            pages: queue.pages,
+            total: queue.total,
+            pageSize: queue.pageSize,
+          },
+        };
+      }
+      res.json({ ...payload, serverTime: new Date().toISOString() });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.get('/queue/:station', async (req, res, next) => {
     try {
       const { station } = req.params;
       if (!STATIONS.includes(station)) throw badRequest('INVALID_STATION', 'Unknown station');
-      if (req.staff.role !== 'admin' && req.staff.role !== station) {
-        return res.status(403).json({
-          error: { code: 'FORBIDDEN', message: 'Your role cannot view this station' },
-          requestId: req.id,
-        });
-      }
       const page = Math.max(1, Number.parseInt(req.query.page || '1', 10) || 1);
       const queue = await orders.listStationQueue(station, { page, pageSize: 20 });
       const details = orders.detailMany
@@ -148,7 +186,7 @@ export function staffRoutes({
 
   router.patch(
     '/orders/:id/payment',
-    requireRoles('admin', 'cashier'),
+    requireRoles('admin', 'staff'),
     requireCsrf,
     async (req, res, next) => {
       try {
@@ -172,36 +210,28 @@ export function staffRoutes({
     },
   );
 
-  router.patch('/orders/:id/status', requireCsrf, async (req, res, next) => {
-    try {
-      const input = parse(statusPatchSchema, req.body);
-      const current = await orders.findById(req.params.id);
-      const role = req.staff.role;
-      const allowed =
-        role === 'admin' ||
-        (role === 'cashier' && input.status === 'cancelled' && current?.status === 'placed') ||
-        (role === 'kitchen' && ['preparing', 'ready'].includes(input.status)) ||
-        (role === 'serving' && input.status === 'completed');
-      if (!allowed) {
-        return res.status(403).json({
-          error: { code: 'FORBIDDEN', message: 'Your role cannot perform this transition' },
+  router.patch(
+    '/orders/:id/status',
+    requireRoles('admin', 'staff'),
+    requireCsrf,
+    async (req, res, next) => {
+      try {
+        const input = parse(statusPatchSchema, req.body);
+        const updated = await orderService.changeStatus({
+          orderId: req.params.id,
+          newStatus: input.status,
+          version: input.version,
+          actor: req.staff.username,
+          actorRole: req.staff.role,
           requestId: req.id,
+          ip: req.ip,
         });
+        res.json({ order: updated });
+      } catch (error) {
+        next(error);
       }
-      const updated = await orderService.changeStatus({
-        orderId: req.params.id,
-        newStatus: input.status,
-        version: input.version,
-        actor: req.staff.username,
-        actorRole: req.staff.role,
-        requestId: req.id,
-        ip: req.ip,
-      });
-      res.json({ order: updated });
-    } catch (error) {
-      next(error);
-    }
-  });
+    },
+  );
 
   router.get('/events', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');

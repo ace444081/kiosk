@@ -65,20 +65,27 @@ export class OrderRepository {
       .all(...params);
   }
 
-  listStationQueue(station, { page = 1, pageSize = 20 } = {}) {
+  listStationQueue(
+    station,
+    { page = 1, pageSize = 20, includeRecentConfirmed = true, includeRecentCompleted = true } = {},
+  ) {
     const offset = (page - 1) * pageSize;
     let where;
     let orderBy = 'created_at ASC, daily_sequence ASC';
     if (station === 'cashier') {
-      where = `(status = 'placed' AND payment_status = 'pending_cash')
-        OR (payment_method = 'cash' AND payment_status = 'cash_received'
-            AND updated_at >= strftime('%Y-%m-%dT%H:%M:%fZ','now','-10 seconds'))`;
+      where = includeRecentConfirmed
+        ? `(status = 'placed' AND payment_status = 'pending_cash')
+          OR (payment_method = 'cash' AND payment_status = 'cash_received'
+              AND updated_at >= strftime('%Y-%m-%dT%H:%M:%fZ','now','-10 seconds'))`
+        : `(status = 'placed' AND payment_status = 'pending_cash')`;
     } else if (station === 'kitchen') {
       where = `(status = 'placed' AND payment_status IN ('cash_received','demo_confirmed'))
         OR status = 'preparing'`;
     } else {
-      where = `status = 'ready'
-        OR (status = 'completed' AND completed_at >= strftime('%Y-%m-%dT%H:%M:%fZ','now','-60 seconds'))`;
+      where = includeRecentCompleted
+        ? `status = 'ready'
+          OR (status = 'completed' AND completed_at >= strftime('%Y-%m-%dT%H:%M:%fZ','now','-60 seconds'))`
+        : `status = 'ready'`;
       orderBy = `CASE status WHEN 'ready' THEN 0 ELSE 1 END, COALESCE(ready_at, created_at) ASC`;
     }
     const total = this.db.prepare(`SELECT COUNT(*) AS n FROM orders WHERE ${where}`).get().n;
@@ -235,7 +242,7 @@ export class OrderRepository {
     return this.findById(orderId);
   }
 
-  updateStatus(id, status, { preparingAt, readyAt, completedAt, cancelledAt }) {
+  updateStatus(id, status, { version, preparingAt, readyAt, completedAt, cancelledAt }) {
     const sets = [
       'status = ?',
       'version = version + 1',
@@ -258,18 +265,23 @@ export class OrderRepository {
       sets.push('cancelled_at = ?');
       params.push(cancelledAt);
     }
-    params.push(id);
-    this.db.prepare(`UPDATE orders SET ${sets.join(', ')} WHERE id = ?`).run(...params);
+    params.push(id, version);
+    const result = this.db
+      .prepare(`UPDATE orders SET ${sets.join(', ')} WHERE id = ? AND version = ?`)
+      .run(...params);
+    if (result.changes === 0) return null;
     return this.findById(id);
   }
 
-  updatePaymentStatus(id, paymentStatus, paymentConfirmedAt) {
-    this.db
+  updatePaymentStatus(id, paymentStatus, paymentConfirmedAt, paymentConfirmedBy, version) {
+    const result = this.db
       .prepare(
         `UPDATE orders SET payment_status = ?, payment_confirmed_at = ?, version = version + 1,
-           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
+           payment_confirmed_by = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+           WHERE id = ? AND version = ?`,
       )
-      .run(paymentStatus, paymentConfirmedAt, id);
+      .run(paymentStatus, paymentConfirmedAt, paymentConfirmedBy, id, version);
+    if (result.changes === 0) return null;
     return this.findById(id);
   }
 }

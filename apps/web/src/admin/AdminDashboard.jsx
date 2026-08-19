@@ -277,6 +277,62 @@ function ServiceTimes({ serviceTimes }) {
   );
 }
 
+function StaffPerformance({ staffPerformance }) {
+  const { t } = useTranslation();
+  return (
+    <section className="dashboard-panel dashboard-staff-panel">
+      <div className="dashboard-panel-heading">
+        <div>
+          <p className="dashboard-section-kicker">{t('admin.staffMonitoring')}</p>
+          <h2>{t('admin.staffPerformance')}</h2>
+        </div>
+        <span className="dashboard-panel-note">{t('admin.cashAttributionNote')}</span>
+      </div>
+      {staffPerformance.length ? (
+        <div className="orders-table-wrap">
+          <table className="orders-table staff-performance-table">
+            <thead>
+              <tr>
+                <th>{t('admin.staffMember')}</th>
+                <th>{t('admin.cashConfirmed')}</th>
+                <th>{t('admin.cashCollected')}</th>
+                <th>{t('admin.completedCash')}</th>
+                <th>{t('admin.averageCashOrder')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {staffPerformance.map((staff) => (
+                <tr key={staff.username}>
+                  <td data-label={t('admin.staffMember')}>
+                    <strong>{staff.username}</strong>
+                    <span className={`staff-presence ${staff.active ? 'active' : 'inactive'}`}>
+                      {staff.active ? t('admin.active') : t('admin.inactive')}
+                    </span>
+                  </td>
+                  <td data-label={t('admin.cashConfirmed')}>{staff.cashConfirmedOrders}</td>
+                  <td data-label={t('admin.cashCollected')}>
+                    {formatPeso(staff.cashCollectedCentavos)}
+                  </td>
+                  <td data-label={t('admin.completedCash')}>
+                    {staff.completedCashOrders} · {formatPeso(staff.completedCashCentavos)}
+                  </td>
+                  <td data-label={t('admin.averageCashOrder')}>
+                    {staff.averageCashOrderCentavos == null
+                      ? 'N/A'
+                      : formatPeso(staff.averageCashOrderCentavos)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="dashboard-empty-panel">{t('admin.noStaffAccounts')}</div>
+      )}
+    </section>
+  );
+}
+
 export function AdminDashboard() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -537,6 +593,7 @@ export function AdminDashboard() {
         <TopProducts products={analytics.topProducts} />
         <ServiceTimes serviceTimes={analytics.serviceTimes} />
       </div>
+      <StaffPerformance staffPerformance={analytics.staffPerformance || []} />
       <div className="simulated-note">{t('admin.simulatedNote')}</div>
     </div>
   );

@@ -1,14 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { expectNoHorizontalOverflow } from './helpers.js';
 
-const password = (role) => `e2e-${role}-1234`;
+const password = 'e2e-staff-1234';
 
-async function staffLogin(page, role) {
-  await page.goto('/staff/login');
-  await page.getByLabel('Username').fill(`e2e-${role}`);
-  await page.getByLabel('Password').fill(password(role));
-  await page.getByRole('button', { name: 'Open station' }).click();
-  await expect(page).toHaveURL(new RegExp(`/staff/${role}$`));
+async function staffLogin(page, station) {
+  await page.goto(`/staff/login?station=${station}`);
+  await page.getByLabel('Username').fill('e2e-staff');
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Open workboard' }).click();
+  await expect(page).toHaveURL(/\/staff\/operations/);
 }
 
 async function logout(page) {
@@ -16,7 +16,7 @@ async function logout(page) {
   await expect(page).toHaveURL(/\/staff\/login$/);
 }
 
-test('cashier, kitchen, guest board, and serving complete one cash order', async ({
+test('one staff account can run cashier, kitchen, guest board, and serving', async ({
   page,
   request,
 }) => {
@@ -33,17 +33,17 @@ test('cashier, kitchen, guest board, and serving complete one cash order', async
   const shortNumber = order.orderNumber.split('-').at(-1);
 
   await staffLogin(page, 'cashier');
-  await page.getByRole('button', { name: new RegExp(`#${shortNumber}`) }).click();
+  await page.getByRole('button', { name: new RegExp(`^Now #${shortNumber}\\b`) }).click();
   await page.getByRole('button', { name: 'Confirm cash received' }).click();
-  await expect(page.getByRole('status')).toContainText('Sent to kitchen');
+  await expect(page.getByRole('status')).toContainText('moved to preparation');
   await logout(page);
 
   await staffLogin(page, 'kitchen');
-  await page.getByRole('button', { name: new RegExp(`#${shortNumber}`) }).click();
+  await page.getByRole('button', { name: new RegExp(`^Now #${shortNumber}\\b`) }).click();
   await page.getByRole('button', { name: 'Start preparing' }).click();
-  await expect(page.getByText('On time', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: new RegExp(`#${shortNumber}`) }).click();
-  await page.getByRole('button', { name: 'Mark ready' }).click();
+  await expect(page.getByText(/^Preparing ·/)).toBeVisible();
+  await page.getByRole('button', { name: new RegExp(`^Now #${shortNumber}\\b`) }).click();
+  await page.getByRole('button', { name: 'Mark ready', exact: true }).click();
   await logout(page);
 
   const board = await page.context().newPage();
@@ -51,8 +51,8 @@ test('cashier, kitchen, guest board, and serving complete one cash order', async
   await expect(board.getByText(shortNumber, { exact: true })).toBeVisible();
 
   await staffLogin(page, 'serving');
-  await page.getByRole('button', { name: new RegExp(`#${shortNumber}`) }).click();
-  await page.getByRole('button', { name: 'Mark served' }).click();
+  await page.getByRole('button', { name: new RegExp(`^Now #${shortNumber}\\b`) }).click();
+  await page.getByRole('button', { name: 'Mark served', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('completed');
   await expect(board.getByText(shortNumber, { exact: true })).toBeVisible();
 });
@@ -65,7 +65,7 @@ test('station and guest board remain usable on phone and tablet', async ({ page 
     await page.setViewportSize(viewport);
     await staffLogin(page, 'kitchen');
     await expect(page.getByRole('button', { name: 'Sound off' })).toBeVisible();
-    await expect(page.getByText('Select a ticket to continue')).toBeVisible();
+    await expect(page.getByText('Select a ticket from any lane to continue')).toBeVisible();
     await expectNoHorizontalOverflow(page);
     await logout(page);
     await page.goto('/order-board');

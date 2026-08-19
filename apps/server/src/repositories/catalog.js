@@ -86,13 +86,15 @@ export class CatalogRepository {
       .all(...groupIds);
   }
 
-  updateAvailability(productId, isAvailable) {
-    this.db
+  updateAvailability(productId, isAvailable, expectedVersion) {
+    const result = this.db
       .prepare(
         `UPDATE products SET is_available = ?, version = version + 1,
-           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+           WHERE id = ? AND version = ?`,
       )
-      .run(isAvailable ? 1 : 0, productId);
+      .run(isAvailable ? 1 : 0, productId, expectedVersion);
+    if (result.changes === 0) return null;
     return this.findProductById(productId);
   }
 
@@ -162,13 +164,15 @@ export class CatalogRepository {
     return this.findProductById(input.sku);
   }
 
-  updatePublication(productId, { isPublished, isAvailable }) {
-    this.db
+  updatePublication(productId, { isPublished, isAvailable }, expectedVersion) {
+    const result = this.db
       .prepare(
         `UPDATE products SET is_published = ?, is_available = ?, version = version + 1,
-           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+           WHERE id = ? AND version = ?`,
       )
-      .run(isPublished ? 1 : 0, isAvailable ? 1 : 0, productId);
+      .run(isPublished ? 1 : 0, isAvailable ? 1 : 0, productId, expectedVersion);
+    if (result.changes === 0) return null;
     return this.findProductById(productId);
   }
 

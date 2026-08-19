@@ -17,7 +17,7 @@ import { AdminReports } from './admin/AdminReports.jsx';
 import { StandbyScreen } from './admin/StandbyScreen.jsx';
 import { StaffLoginScreen } from './staff/StaffLoginScreen.jsx';
 import { StaffShell, StaffLauncher } from './staff/StaffShell.jsx';
-import { StationScreen } from './staff/StationScreen.jsx';
+import { StaffOperations } from './staff/StaffOperations.jsx';
 import { OrderBoard } from './staff/OrderBoard.jsx';
 
 export default function App() {
@@ -45,9 +45,10 @@ export default function App() {
       <Route path="/staff/login" element={<StaffLoginScreen />} />
       <Route path="/staff" element={<StaffShell />}>
         <Route index element={<StaffLauncher />} />
-        <Route path="cashier" element={<StationScreen station="cashier" />} />
-        <Route path="kitchen" element={<StationScreen station="kitchen" />} />
-        <Route path="serving" element={<StationScreen station="serving" />} />
+        <Route path="operations" element={<StaffOperations />} />
+        <Route path="cashier" element={<StaffOperations />} />
+        <Route path="kitchen" element={<StaffOperations />} />
+        <Route path="serving" element={<StaffOperations />} />
       </Route>
       <Route path="/order-board" element={<OrderBoard />} />
       <Route path="*" element={<Navigate to="/kiosk" replace />} />

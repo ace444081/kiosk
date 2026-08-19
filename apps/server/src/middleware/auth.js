@@ -1,5 +1,5 @@
 import { unauthorized, forbidden } from '../utils/app-error.js';
-import { AdminAuthService } from '../services/admin-auth.js';
+import { AdminAuthService, normalizeAccountRole } from '../services/admin-auth.js';
 
 /** Require an authenticated admin session. */
 export function requireAuth(req, res, next) {
@@ -24,9 +24,9 @@ export function resolveStaff(source) {
         if (!account || account.is_active !== 1) {
           return next(unauthorized('UNAUTHORIZED', 'Authentication required'));
         }
-        req.staff = account;
+        req.staff = { ...account, role: normalizeAccountRole(account.role) };
         req.session.username = account.username;
-        req.session.role = account.role;
+        req.session.role = req.staff.role;
         next();
       })
       .catch(next);

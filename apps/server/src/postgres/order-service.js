@@ -321,6 +321,7 @@ export class PgOrderService {
       orderId,
       'cash_received',
       new Date().toISOString(),
+      actor,
       version,
     );
     if (!updated) throw conflict('STALE_VERSION', 'Order was modified by another action');

@@ -14,6 +14,15 @@ export class AdminRepository {
     return this.db.prepare('SELECT * FROM admins WHERE id = ?').get(id) || null;
   }
 
+  listStaff() {
+    return this.db
+      .prepare(
+        `SELECT id, username, role, is_active
+         FROM admins WHERE role = 'staff' ORDER BY username COLLATE NOCASE`,
+      )
+      .all();
+  }
+
   create({ id, username, passwordHash, role = 'admin' }) {
     this.db
       .prepare('INSERT INTO admins (id, username, password_hash, role) VALUES (?, ?, ?, ?)')

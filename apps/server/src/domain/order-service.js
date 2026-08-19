@@ -331,11 +331,18 @@ export class OrderService {
 
     const previous = { status: order.status, payment_status: order.payment_status };
     const updated = this.orders.updateStatus(orderId, newStatus, {
+      version,
       preparingAt: newStatus === 'preparing' ? new Date().toISOString() : undefined,
       readyAt: newStatus === 'ready' ? new Date().toISOString() : undefined,
       completedAt: newStatus === 'completed' ? new Date().toISOString() : undefined,
       cancelledAt: newStatus === 'cancelled' ? new Date().toISOString() : undefined,
     });
+
+    if (!updated) {
+      throw conflict('STALE_VERSION', 'Order was modified by another action', {
+        order: this.serializeOrder(this.orders.detail(orderId)),
+      });
+    }
 
     this.audit.record({
       actor,
@@ -385,7 +392,15 @@ export class OrderService {
       orderId,
       'cash_received',
       new Date().toISOString(),
+      actor,
+      version,
     );
+
+    if (!updated) {
+      throw conflict('STALE_VERSION', 'Order was modified by another action', {
+        order: this.serializeOrder(this.orders.detail(orderId)),
+      });
+    }
 
     this.audit.record({
       actor,

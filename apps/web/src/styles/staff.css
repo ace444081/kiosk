@@ -233,6 +233,85 @@
   overflow: auto;
   align-content: start;
 }
+
+.workboard-toolbar {
+  align-items: center;
+}
+
+.workboard-lanes {
+  min-height: 0;
+  padding: 8px 20px 16px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  overflow: hidden;
+}
+
+.workboard-lane {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #334154;
+  border-radius: 12px;
+  background: #121e2b;
+  overflow: hidden;
+}
+
+.workboard-lane-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 4px 10px;
+  border-bottom: 1px solid #344153;
+}
+
+.workboard-lane-heading p {
+  margin: 0 0 3px;
+  color: #df845d;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.workboard-lane-heading h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 1.25rem;
+}
+
+.workboard-lane-heading > strong {
+  color: #f0f4f8;
+  font-size: 1.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.workboard-lane-list {
+  min-height: 0;
+  display: grid;
+  grid-auto-rows: minmax(210px, auto);
+  align-content: start;
+  gap: 10px;
+  overflow: auto;
+  padding-right: 3px;
+}
+
+.workboard-lane-list .station-empty {
+  min-height: 220px;
+}
+
+.workboard-footer {
+  justify-content: flex-end;
+}
+
+.workboard-footer .station-action {
+  width: 100%;
+  justify-content: space-between;
+}
 .station-ticket {
   min-width: 0;
   border: 1px solid #3a485b;
@@ -615,6 +694,13 @@
   .station-queue {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+  .workboard-lanes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: auto;
+  }
+  .workboard-lane:last-child {
+    grid-column: 1 / -1;
+  }
   .board-numbers {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -635,6 +721,31 @@
     height: auto;
     overflow: visible;
     grid-template-rows: auto auto auto auto auto;
+  }
+  .workboard-shell {
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  }
+  .workboard-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .workboard-lanes {
+    display: block;
+    overflow: auto;
+    padding: 8px 12px 16px;
+  }
+  .workboard-lane {
+    display: flex;
+    min-height: 0;
+    height: auto;
+    min-height: 300px;
+  }
+  .workboard-footer .station-action {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .workboard-footer .station-action .station-primary {
+    width: 100%;
   }
   .station-header {
     align-items: flex-start;

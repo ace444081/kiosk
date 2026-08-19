@@ -52,7 +52,65 @@ function isCompletedAndPaid(order) {
   return order.status === 'completed' && isPaymentConfirmed(order.payment_status);
 }
 
-export function buildDashboardAnalytics({ orders = [], items = [], from, to }) {
+/**
+ * Attribute confirmed cash activity to the staff account that accepted it.
+ * Accounts with no activity remain in the result so the admin can monitor a
+ * multi-user team without needing a separate account-management query.
+ */
+export function buildStaffPerformance({ orders = [], staffAccounts = [] }) {
+  const metrics = new Map(
+    staffAccounts.map((account) => [
+      account.username,
+      {
+        username: account.username,
+        active: account.is_active === 1 || account.is_active === true,
+        cashConfirmedOrders: 0,
+        cashCollectedCentavos: 0,
+        completedCashOrders: 0,
+        completedCashCentavos: 0,
+        averageCashOrderCentavos: null,
+        lastCashConfirmationAt: null,
+      },
+    ]),
+  );
+
+  for (const order of orders) {
+    if (
+      order.payment_method !== 'cash' ||
+      order.payment_status !== 'cash_received' ||
+      !order.payment_confirmed_by
+    )
+      continue;
+    const metric = metrics.get(order.payment_confirmed_by);
+    if (!metric) continue;
+    metric.cashConfirmedOrders += 1;
+    metric.cashCollectedCentavos += number(order.total_centavos);
+    if (order.status === 'completed') {
+      metric.completedCashOrders += 1;
+      metric.completedCashCentavos += number(order.total_centavos);
+    }
+    if (
+      !metric.lastCashConfirmationAt ||
+      new Date(order.payment_confirmed_at).getTime() >
+        new Date(metric.lastCashConfirmationAt).getTime()
+    ) {
+      metric.lastCashConfirmationAt = order.payment_confirmed_at;
+    }
+  }
+
+  for (const metric of metrics.values()) {
+    metric.averageCashOrderCentavos = metric.cashConfirmedOrders
+      ? Math.round(metric.cashCollectedCentavos / metric.cashConfirmedOrders)
+      : null;
+  }
+
+  return [...metrics.values()].sort(
+    (a, b) =>
+      b.cashCollectedCentavos - a.cashCollectedCentavos || a.username.localeCompare(b.username),
+  );
+}
+
+export function buildDashboardAnalytics({ orders = [], items = [], from, to, staffAccounts = [] }) {
   const completedPaid = orders.filter(isCompletedAndPaid);
   const completedCash = completedPaid.filter(
     (order) => order.payment_method === 'cash' && order.payment_status === 'cash_received',
@@ -187,6 +245,7 @@ export function buildDashboardAnalytics({ orders = [], items = [], from, to }) {
     paymentMix,
     topProducts,
     serviceTimes,
+    staffPerformance: buildStaffPerformance({ orders, staffAccounts }),
     coverage: {
       hasData: orders.length > 0,
       firstDate: orders.length ? String(orders[0].business_date) : null,

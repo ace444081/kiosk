@@ -7,7 +7,10 @@ export function StaffShell() {
   const [ready, setReady] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const routeStation = location.pathname.split('/')[2] || 'launcher';
+  const routeSegment = location.pathname.split('/')[2] || 'launcher';
+  const routeStation = ['cashier', 'kitchen', 'serving'].includes(routeSegment)
+    ? routeSegment
+    : 'launcher';
   const sessionStation = getStaffStation(routeStation);
   useEffect(() => {
     fetchStaffSession(sessionStation)
@@ -25,31 +28,30 @@ export function StaffShell() {
   if (!session) {
     return <Navigate to={`/staff/login?station=${encodeURIComponent(routeStation)}`} replace />;
   }
-  const station = location.pathname.split('/')[2] || '';
-  if (session.role !== 'admin' && station && session.role !== station) {
-    return <Navigate to={`/staff/${session.role}`} replace />;
+  if (!['admin', 'staff'].includes(session.role)) {
+    return <Navigate to="/staff/login" replace />;
   }
   const logout = async () => {
     await staffLogout(sessionStation);
     navigate('/staff/login', { replace: true });
   };
-  return <Outlet context={{ session, logout }} />;
+  return <Outlet context={{ session, logout, sessionStation }} />;
 }
 
 export function StaffLauncher() {
   const stations = [
-    ['cashier', 'Cashier', 'Confirm cash before the order reaches the kitchen.'],
-    ['kitchen', 'Kitchen', 'Prepare paid orders and send them to the serving counter.'],
-    ['serving', 'Serving', 'Verify ready orders and complete the customer handoff.'],
+    ['payment', 'Payment', 'Confirm cash before the order reaches preparation.'],
+    ['preparation', 'Preparation', 'Prepare paid orders and track the timer.'],
+    ['handoff', 'Handoff', 'Complete the customer handoff and close the order.'],
   ];
   return (
     <main className="staff-launcher">
       <img src="/placeholders/logo.svg" alt="Sweet Gonz" />
-      <p className="station-eyebrow">Station launcher</p>
-      <h1>Choose an operations view</h1>
+      <p className="station-eyebrow">One-person operations</p>
+      <h1>Open the unified workboard</h1>
       <div>
         {stations.map(([key, title, text]) => (
-          <a key={key} href={`/staff/${key}`}>
+          <a key={key} href={`/staff/operations?lane=${key}`}>
             <span>
               {String(stations.indexOf(stations.find((s) => s[0] === key)) + 1).padStart(2, '0')}
             </span>

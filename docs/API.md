@@ -146,26 +146,31 @@ receipts are indistinguishable: `404 INVALID_RECEIPT_TOKEN`. Response body:
 ## Admin endpoints
 
 Admin management endpoints below require an authenticated account whose role
-is `admin`. A valid session alone is not enough.
+is `admin`. A valid session alone is not enough. Operational accounts use the
+single `staff` role; cashier, kitchen, and serving are station views rather
+than separate account roles.
 
 ## Staff station endpoints
 
 All station responses use `Cache-Control: no-store`. Mutations require the
 session CSRF token and current order `version`.
 
-| Method | Path                               | Roles                | Purpose                                                       |
-| ------ | ---------------------------------- | -------------------- | ------------------------------------------------------------- |
-| POST   | `/api/v1/staff/session`            | Public               | Staff/admin login; returns username, role, CSRF token, expiry |
-| GET    | `/api/v1/staff/session`            | Any staff            | Resolve the current account and role                          |
-| DELETE | `/api/v1/staff/session`            | Any staff            | Sign out                                                      |
-| GET    | `/api/v1/staff/queue/cashier`      | Cashier, admin       | Pending cash and brief recently-confirmed handoff queue       |
-| GET    | `/api/v1/staff/queue/kitchen`      | Kitchen, admin       | Paid placed orders and preparing orders                       |
-| GET    | `/api/v1/staff/queue/serving`      | Serving, admin       | Ready orders and 60-second completed history                  |
-| PATCH  | `/api/v1/staff/orders/:id/payment` | Cashier, admin       | Confirm cash before preparation                               |
-| PATCH  | `/api/v1/staff/orders/:id/status`  | Station owner, admin | Role-checked workflow transition                              |
-| GET    | `/api/v1/staff/events`             | Any staff            | Refresh-only live event stream                                |
+| Method | Path                               | Roles        | Purpose                                                       |
+| ------ | ---------------------------------- | ------------ | ------------------------------------------------------------- |
+| POST   | `/api/v1/staff/session`            | Public       | Staff/admin login; returns username, role, CSRF token, expiry |
+| GET    | `/api/v1/staff/session`            | Any staff    | Resolve the current account and role                          |
+| DELETE | `/api/v1/staff/session`            | Any staff    | Sign out                                                      |
+| GET    | `/api/v1/staff/workboard`          | Staff, admin | Combined payment, preparation, and handoff workboard          |
+| GET    | `/api/v1/staff/queue/cashier`      | Staff, admin | Pending cash and brief recently-confirmed handoff queue       |
+| GET    | `/api/v1/staff/queue/kitchen`      | Staff, admin | Paid placed orders and preparing orders                       |
+| GET    | `/api/v1/staff/queue/serving`      | Staff, admin | Ready orders and 60-second completed history                  |
+| PATCH  | `/api/v1/staff/orders/:id/payment` | Staff, admin | Confirm cash before preparation                               |
+| PATCH  | `/api/v1/staff/orders/:id/status`  | Staff, admin | Workflow transition from any station view                     |
+| GET    | `/api/v1/staff/events`             | Any staff    | Refresh-only live event stream                                |
 
 Staff station requests may send `X-Staff-Station: launcher|cashier|kitchen|serving`.
+The selected value controls the station session/view, not the account's role;
+one staff account can use all three operational stations.
 The server keeps separate station cookies so multiple station tabs in one
 browser do not overwrite each other's CSRF session.
 
@@ -272,7 +277,45 @@ completed sales. Demo amounts are simulated.
 Returns the selected business-date range for the Operations and Sales
 dashboard. The response includes the period summary, daily activity, workflow
 mix, payment mix, top products, service-time averages, and data coverage.
-Real cash and simulated demo-wallet amounts are separate fields.
+Real cash and simulated demo-wallet amounts are separate fields. It also
+includes `staffPerformance`, with one row for every staff account and metrics
+for cash-confirmed orders, cash collected, completed cash, average cash order,
+and the latest cash confirmation in the selected period. Cash attribution is
+based on the staff account that confirms the payment.
+
+### `GET /api/v1/admin/summary`
+
+The daily summary response also includes top-level `staffPerformance` for the
+current Manila business date.
+
+### `GET /api/v1/admin/menu-config`
+
+Returns the categories and add-ons used by the admin product-creation form.
+
+### `POST /api/v1/admin/products`
+
+Creates a product, its add-on compatibility links, and its option groups in one
+transaction. The product may start as a draft, published-unavailable item, or
+published-available item, subject to the shared product schema.
+
+### `PATCH /api/v1/admin/products/:id/publication`
+
+Changes `{ isPublished, isAvailable, version }` with optimistic concurrency.
+Draft products cannot be available.
+
+### `GET /api/v1/admin/audit-events`
+
+Lists audit events filtered by action and optional business-date range.
+
+### `GET /api/v1/admin/reports/summary?from=YYYY-MM-DD&to=YYYY-MM-DD`
+
+Returns a cash-first statement summary with completed cash, simulated demo,
+and pending cash kept separate.
+
+### `GET /api/v1/admin/reports/soa.xlsx?from=YYYY-MM-DD&to=YYYY-MM-DD`
+
+Downloads the operations workbook for the selected period and records an
+`SOA_EXPORTED` audit event.
 
 ### `GET /api/v1/admin/events`
 

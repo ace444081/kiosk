@@ -21,10 +21,11 @@ import {
   requireRoles,
 } from '../middleware/auth.js';
 import { buildDailySummary } from '../domain/summary.js';
-import { buildDashboardAnalytics } from '../services/dashboard-analytics.js';
+import { buildDashboardAnalytics, buildStaffPerformance } from '../services/dashboard-analytics.js';
 import { createOperationsWorkbook } from '../services/operations-workbook.js';
 import { CatalogRepository } from '../repositories/catalog.js';
 import { OrderRepository } from '../repositories/orders.js';
+import { AdminRepository } from '../repositories/admins.js';
 import { AuditRepository } from '../repositories/audit.js';
 import { EVENT_TYPES } from '../events/event-types.js';
 import { buildSoaSummary } from '../services/soa-report.js';
@@ -78,6 +79,7 @@ export function adminRoutes({
 }) {
   const router = Router();
   const admins = adminsOverride;
+  const accountDirectory = adminsOverride || new AdminRepository(db);
   const catalog = catalogOverride || new CatalogRepository(db);
   const orders = ordersOverride || new OrderRepository(db);
   const audit = auditOverride || new AuditRepository(db);
@@ -184,6 +186,7 @@ export function adminRoutes({
         preparingAt: row.preparing_at || null,
         readyAt: row.ready_at || null,
         paymentConfirmedAt: row.payment_confirmed_at || null,
+        paymentConfirmedBy: row.payment_confirmed_by || null,
         completedAt: row.completed_at || null,
         cancelledAt: row.cancelled_at || null,
         itemCount: row.item_count ?? 0,
@@ -447,8 +450,13 @@ export function adminRoutes({
   router.get('/summary', requireAuth, async (req, res, next) => {
     try {
       const summary = await buildDailySummary(db, undefined, orders);
+      const [todayOrders, staffAccounts] = await Promise.all([
+        orders.list({ date: summary.businessDate }),
+        accountDirectory.listStaff(),
+      ]);
       res.json({
         summary,
+        staffPerformance: buildStaffPerformance({ orders: todayOrders, staffAccounts }),
         connection: {
           status: 'ok',
           serverTime: new Date().toISOString(),
@@ -463,13 +471,15 @@ export function adminRoutes({
   router.get('/analytics', requireAuth, async (req, res, next) => {
     try {
       const range = parseOrThrow(reportQuerySchema, req.query);
-      const [reportOrders, reportItems] = await Promise.all([
+      const [reportOrders, reportItems, staffAccounts] = await Promise.all([
         orders.listForReport(range),
         orders.itemsForReport(range),
+        accountDirectory.listStaff(),
       ]);
       const analytics = buildDashboardAnalytics({
         orders: reportOrders,
         items: reportItems,
+        staffAccounts,
         ...range,
       });
       res.json({

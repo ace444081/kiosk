@@ -63,7 +63,9 @@ and session store.
   predicate, preventing stale station devices from overwriting newer state.
 - Foreign keys, check constraints, unique indexes, and report indexes are
   applied in the private `app` schema.
-- Audit events record actor, role, request ID, timestamp, and deployment ID.
+- Audit events record actor, unified account role, request ID, timestamp, and
+  deployment ID. Cash orders also persist the staff username that confirmed
+  payment so admin reporting can compare multiple staff users.
 
 ## Request and event behavior
 

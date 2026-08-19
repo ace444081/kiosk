@@ -3,7 +3,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError } from '../services/api.js';
 import { staffLogin } from '../services/admin-api.js';
 
-const destination = (role) => (role === 'admin' ? '/staff' : `/staff/${role}`);
+const destination = (station) =>
+  ['cashier', 'kitchen', 'serving'].includes(station)
+    ? `/staff/operations?lane=${station === 'cashier' ? 'payment' : station === 'kitchen' ? 'preparation' : 'handoff'}`
+    : '/staff/operations';
 
 export function StaffLoginScreen() {
   const navigate = useNavigate();
@@ -19,8 +22,8 @@ export function StaffLoginScreen() {
     setBusy(true);
     setError('');
     try {
-      const session = await staffLogin(username, password, station);
-      navigate(destination(session.role), { replace: true });
+      await staffLogin(username, password, station);
+      navigate(destination(station), { replace: true });
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 429
@@ -38,15 +41,15 @@ export function StaffLoginScreen() {
         <img src="/placeholders/logo.svg" alt="Sweet Gonz Bakeshop Café" />
         <p>Restaurant operations</p>
         <h1>
-          One order.
+          One operator.
           <br />
-          One clear handoff.
+          One clear workboard.
         </h1>
-        <span>Kiosk · Cashier · Kitchen · Serving</span>
+        <span>Payment · Preparation · Handoff</span>
       </section>
       <form className="staff-login-form" onSubmit={submit}>
         <p className="station-eyebrow">Staff access</p>
-        <h2>Sign in to your station</h2>
+        <h2>Sign in to operations</h2>
         <label>
           Username
           <input
@@ -70,7 +73,7 @@ export function StaffLoginScreen() {
           </p>
         )}
         <button className="station-primary" disabled={busy || !username || !password}>
-          {busy ? 'Signing in…' : 'Open station'}
+          {busy ? 'Signing in…' : 'Open workboard'}
         </button>
         <a href="/admin/login">Administrator console</a>
       </form>

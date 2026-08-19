@@ -4,6 +4,9 @@
 
 export const BUSINESS_TIMEZONE = 'Asia/Manila';
 
+export const ACCOUNT_ROLES = ['admin', 'staff'];
+export const STAFF_STATIONS = ['cashier', 'kitchen', 'serving'];
+
 export const ORDER_STATUSES = ['placed', 'preparing', 'ready', 'completed', 'cancelled'];
 export const ORDER_STATUS_LABELS = {
   placed: 'Placed',

@@ -126,7 +126,7 @@ CREATE TABLE IF NOT EXISTS app.admins (
   id TEXT PRIMARY KEY,
   username TEXT NOT NULL,
   password_hash TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('admin','cashier','kitchen','serving')),
+  role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('admin','staff')),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS app.admin_sessions (
 CREATE TABLE IF NOT EXISTS app.audit_events (
   id TEXT PRIMARY KEY,
   actor TEXT NOT NULL,
-  actor_role TEXT CHECK (actor_role IS NULL OR actor_role IN ('admin','cashier','kitchen','serving','kiosk','system')),
+  actor_role TEXT CHECK (actor_role IS NULL OR actor_role IN ('admin','staff','kiosk','system')),
   action TEXT NOT NULL,
   target_type TEXT,
   target_id TEXT,

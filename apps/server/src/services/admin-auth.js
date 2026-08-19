@@ -4,6 +4,11 @@ import { AuditRepository } from '../repositories/audit.js';
 import { generateToken, timingSafeEqualString } from '../security/tokens.js';
 import { unauthorized } from '../utils/app-error.js';
 
+/** Normalize legacy station-specific accounts into the unified staff role. */
+export function normalizeAccountRole(role) {
+  return role === 'admin' ? 'admin' : 'staff';
+}
+
 /**
  * Login-rate limiting: max failed attempts per IP+username pair per window.
  * Success resets the pair; failures are counted. Purely in-memory (single
@@ -82,7 +87,7 @@ export class AdminAuthService {
     if (!valid) {
       await this.audit.record({
         actor: username || 'unknown',
-        actorRole: admin?.role || null,
+        actorRole: admin ? normalizeAccountRole(admin.role) : null,
         action: 'ADMIN_LOGIN_FAILED',
         targetType: 'admin',
         targetId: admin?.id || null,
@@ -95,7 +100,7 @@ export class AdminAuthService {
 
     await this.audit.record({
       actor: admin.username,
-      actorRole: admin.role,
+      actorRole: normalizeAccountRole(admin.role),
       action: 'ADMIN_LOGIN_SUCCESS',
       targetType: 'admin',
       targetId: admin.id,
@@ -103,7 +108,11 @@ export class AdminAuthService {
       ip,
       userAgent,
     });
-    return { adminId: admin.id, username: admin.username, role: admin.role };
+    return {
+      adminId: admin.id,
+      username: admin.username,
+      role: normalizeAccountRole(admin.role),
+    };
   }
 
   /** Attach session state after a successful login. */
@@ -113,7 +122,7 @@ export class AdminAuthService {
         if (err) return reject(err);
         req.session.adminId = admin.adminId;
         req.session.username = admin.username;
-        req.session.role = admin.role;
+        req.session.role = normalizeAccountRole(admin.role);
         req.session.csrfToken = generateToken(32);
         req.session.absExpiresAt = Date.now() + 8 * 60 * 60 * 1000;
         req.session.save((saveErr) => (saveErr ? reject(saveErr) : resolve()));

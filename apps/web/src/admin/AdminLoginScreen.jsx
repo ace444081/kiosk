@@ -19,7 +19,7 @@ export function AdminLoginScreen() {
     setError(null);
     try {
       const session = await adminLogin(username, password);
-      navigate(session.role === 'admin' ? '/admin' : `/staff/${session.role}`, { replace: true });
+      navigate(session.role === 'admin' ? '/admin' : '/staff', { replace: true });
     } catch (err) {
       if (err instanceof ApiError && err.code === 'RATE_LIMITED') {
         setRateLimitSeconds(err.retryAfterSeconds || 60);

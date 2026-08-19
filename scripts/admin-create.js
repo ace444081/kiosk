@@ -22,8 +22,9 @@ const arg = (name) => {
 
 let username = arg('username');
 let password = arg('password');
-const role = arg('role') || 'admin';
-const roles = ['admin', 'cashier', 'kitchen', 'serving'];
+const role =
+  arg('role') || (process.env.npm_lifecycle_event === 'staff:create' ? 'staff' : 'admin');
+const roles = ['admin', 'staff'];
 
 async function askHidden(rl, prompt) {
   // readline promises cannot hide input; use a raw-mode helper.

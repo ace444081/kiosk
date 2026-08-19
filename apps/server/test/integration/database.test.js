@@ -64,12 +64,19 @@ describe('database behaviors', () => {
       '007_integrity_polish',
       '008_station_workflow',
       '009_deployment_identity',
+      '010_unify_staff_roles',
+      '011_cashier_attribution',
     ]);
     const adminColumns = db.pragma('table_info(admins)').map((column) => column.name);
     const orderColumns = db.pragma('table_info(orders)').map((column) => column.name);
     expect(adminColumns).toContain('role');
     expect(orderColumns).toEqual(
-      expect.arrayContaining(['payment_confirmed_at', 'ready_at', 'deployment_id']),
+      expect.arrayContaining([
+        'payment_confirmed_at',
+        'payment_confirmed_by',
+        'ready_at',
+        'deployment_id',
+      ]),
     );
     cleanup();
   });

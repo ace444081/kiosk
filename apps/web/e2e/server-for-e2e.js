@@ -41,15 +41,13 @@ if (!admins.findByUsername('e2e-admin')) {
   });
 }
 
-for (const role of ['cashier', 'kitchen', 'serving']) {
-  if (!admins.findByUsername(`e2e-${role}`)) {
-    admins.create({
-      id: randomId(),
-      username: `e2e-${role}`,
-      passwordHash: AdminAuthService.hashPassword(`e2e-${role}-1234`),
-      role,
-    });
-  }
+if (!admins.findByUsername('e2e-staff')) {
+  admins.create({
+    id: randomId(),
+    username: 'e2e-staff',
+    passwordHash: AdminAuthService.hashPassword('e2e-staff-1234'),
+    role: 'staff',
+  });
 }
 
 const { app } = createApp({ env, db });

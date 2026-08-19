@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { buildDashboardAnalytics } from '../../src/services/dashboard-analytics.js';
+import {
+  buildDashboardAnalytics,
+  buildStaffPerformance,
+} from '../../src/services/dashboard-analytics.js';
 
 const baseOrder = {
   business_date: '2026-08-06',
@@ -86,5 +89,49 @@ describe('buildDashboardAnalytics', () => {
     expect(analytics.daily[1]).toMatchObject({ businessDate: '2026-08-07', orders: 0 });
     expect(analytics.summary.averageOrderValueCentavos).toBeNull();
     expect(analytics.summary.completionRate).toBeNull();
+  });
+
+  it('includes every staff account and attributes confirmed cash to the confirmer', () => {
+    const performance = buildStaffPerformance({
+      staffAccounts: [
+        { username: 'cashier-a', is_active: 1 },
+        { username: 'cashier-b', is_active: 0 },
+      ],
+      orders: [
+        {
+          payment_method: 'cash',
+          payment_status: 'cash_received',
+          payment_confirmed_by: 'cashier-a',
+          payment_confirmed_at: '2026-08-06T09:05:00.000Z',
+          status: 'completed',
+          total_centavos: 10000,
+        },
+        {
+          payment_method: 'cash',
+          payment_status: 'cash_received',
+          payment_confirmed_by: 'cashier-a',
+          payment_confirmed_at: '2026-08-06T09:15:00.000Z',
+          status: 'preparing',
+          total_centavos: 5000,
+        },
+      ],
+    });
+
+    expect(performance).toEqual([
+      expect.objectContaining({
+        username: 'cashier-a',
+        active: true,
+        cashConfirmedOrders: 2,
+        cashCollectedCentavos: 15000,
+        completedCashOrders: 1,
+        completedCashCentavos: 10000,
+        averageCashOrderCentavos: 7500,
+      }),
+      expect.objectContaining({
+        username: 'cashier-b',
+        active: false,
+        cashConfirmedOrders: 0,
+      }),
+    ]);
   });
 });

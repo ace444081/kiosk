@@ -22,9 +22,10 @@ production POS. The following are intentional limitations of this version.
 
 ## Product limitations of this version
 
-1. **Menu editing** — admins can toggle availability only. Prices, names,
-   categories, descriptions, and add-ons require a code change + reseed
-   (documented in MENU_VALIDATION.md).
+1. **Menu editing** — admins can create products, publish/hide products, and
+   toggle availability. Editing the price, name, category, description, or
+   modifier structure of an existing product still requires a code change +
+   reseed (documented in MENU_VALIDATION.md).
 2. **Add-on compatibility matrix is provisional** and requires client
    confirmation before the pilot menu is finalized.
 3. **No refunds** — once completed or cancelled, orders are final.
