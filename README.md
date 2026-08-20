@@ -31,15 +31,14 @@ flowchart LR
 
 ## Roles and routes
 
-| Surface               | Route            |
-| --------------------- | ---------------- |
-| Customer kiosk        | `/kiosk`         |
-| Admin console         | `/admin`         |
-| Cashier               | `/staff/cashier` |
-| Kitchen               | `/staff/kitchen` |
-| Serving counter       | `/staff/serving` |
-| Customer order board  | `/order-board`   |
-| Cloud standby monitor | `/admin/standby` |
+| Surface                 | Route                                                |
+| ----------------------- | ---------------------------------------------------- |
+| Customer kiosk          | `/kiosk`                                             |
+| Admin console           | `/admin`                                             |
+| Unified staff workboard | `/staff/operations`                                  |
+| Legacy staff aliases    | `/staff/cashier`, `/staff/kitchen`, `/staff/serving` |
+| Customer order board    | `/order-board`                                       |
+| Cloud standby monitor   | `/admin/standby`                                     |
 
 The whole-order flow is:
 
@@ -50,6 +49,32 @@ Kiosk -> Cashier payment -> Kitchen preparation -> Serving counter -> Completed
 Cash orders wait for payment confirmation. Simulated wallet orders are already
 paid and enter the kitchen queue. The preparation timer starts only when the
 order becomes `preparing`.
+
+### Hosted test access
+
+The hosted deployment uses two canonical test accounts for the current two-role
+model:
+
+| Account              | Username       | Application access                                  |
+| -------------------- | -------------- | --------------------------------------------------- |
+| Online administrator | `online-admin` | Admin console, reporting, staff monitoring          |
+| Online staff         | `online-staff` | Unified payment, preparation, and handoff workboard |
+
+Hosted login pages:
+
+- Admin: <https://sweetgonz.vercel.app/admin/login>
+- Staff: <https://sweetgonz.vercel.app/staff/login>
+
+Passwords are intentionally not committed to this public repository. They are
+private test credentials issued separately to the project owner. Do not add
+passwords, database URLs, session secrets, or API keys to this file. If a test
+password is lost, create a replacement account from a trusted machine using an
+owner-authorized database connection and the account creation command below.
+
+There is no separate online password for cashier, kitchen, or serving: the
+`online-staff` account handles all three functions. The hosted database may
+retain legacy station role values for backwards compatibility; the server
+normalizes those values to the unified `staff` application role at login.
 
 ## Requirements
 
