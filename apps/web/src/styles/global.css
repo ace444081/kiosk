@@ -116,8 +116,11 @@ a:focus-visible,
   transform: translateY(-50%);
 }
 
-.password-toggle:hover {
+.password-toggle:hover:not(:disabled),
+.password-toggle:active:not(:disabled) {
   background: rgba(27, 42, 74, 0.08);
+  /* Keep the eye anchored; the global button hover animation must not move it. */
+  transform: translateY(-50%);
 }
 
 .password-toggle-icon {
