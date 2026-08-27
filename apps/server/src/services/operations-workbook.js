@@ -340,6 +340,35 @@ function addServiceTimesSheet(workbook, orders) {
   return sheet;
 }
 
+function addCashierStatisticsSheet(workbook, staffPerformance = []) {
+  const sheet = workbook.addWorksheet('Cashier Statistics');
+  addHeader(sheet, [
+    'Cashier',
+    'Account status',
+    'Cash confirmations',
+    'Cash collected',
+    'Completed cash orders',
+    'Completed cash',
+    'Average cash order',
+    'Last cash confirmation (UTC)',
+  ]);
+  for (const staff of staffPerformance) {
+    const row = sheet.addRow([
+      safeText(staff.username),
+      staff.active ? 'Active' : 'Inactive',
+      staff.cashConfirmedOrders,
+      amount(staff.cashCollectedCentavos),
+      staff.completedCashOrders,
+      amount(staff.completedCashCentavos),
+      staff.averageCashOrderCentavos == null ? null : amount(staff.averageCashOrderCentavos),
+      safeText(staff.lastCashConfirmationAt || 'No confirmed cash'),
+    ]);
+    for (const index of [4, 6, 7]) row.getCell(index).numFmt = pesoFormat;
+  }
+  styleSheet(sheet, [24, 16, 20, 18, 24, 18, 22, 30], 'H');
+  return sheet;
+}
+
 function addMenuSheet(workbook, catalog = []) {
   const sheet = workbook.addWorksheet('Menu Status');
   addHeader(sheet, [
@@ -429,6 +458,11 @@ function addDictionarySheet(workbook) {
       'created_at to payment_confirmed_at',
     ],
     [
+      'Cashier statistics',
+      'Confirmed cash orders and amounts grouped by the staff account that accepted payment.',
+      'orders.payment_confirmed_by + admins.role = staff',
+    ],
+    [
       'Preparation time',
       'Minutes from preparation start to ready state.',
       'preparing_at to ready_at',
@@ -473,6 +507,7 @@ export async function createOperationsWorkbook({
   addItemsSheet(workbook, items);
   addProductSheet(workbook, analytics);
   addServiceTimesSheet(workbook, orders);
+  addCashierStatisticsSheet(workbook, analytics.staffPerformance || []);
   addMenuSheet(workbook, catalog);
   addAuditSheet(workbook, auditEvents);
   addDictionarySheet(workbook);

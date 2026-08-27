@@ -39,6 +39,18 @@ describe('createOperationsWorkbook', () => {
         handoffMinutes: 1,
         totalMinutes: 11,
       },
+      staffPerformance: [
+        {
+          username: 'cashier-a',
+          active: true,
+          cashConfirmedOrders: 1,
+          cashCollectedCentavos: 10000,
+          completedCashOrders: 1,
+          completedCashCentavos: 10000,
+          averageCashOrderCentavos: 10000,
+          lastCashConfirmationAt: '2026-08-06T09:05:00.000Z',
+        },
+      ],
       coverage: { hasData: true, firstDate: '2026-08-06', lastDate: '2026-08-06' },
     };
     const summary = {
@@ -70,11 +82,14 @@ describe('createOperationsWorkbook', () => {
       'Order Items',
       'Product Performance',
       'Service Times',
+      'Cashier Statistics',
       'Menu Status',
       'Audit Log',
       'Data Dictionary',
     ]);
     expect(workbook.getWorksheet('Overview').getCell('C8').value).toBe(100);
     expect(workbook.getWorksheet('Daily Summary').getCell('F2').value).toBe(100);
+    expect(workbook.getWorksheet('Cashier Statistics').getCell('A2').value).toBe('cashier-a');
+    expect(workbook.getWorksheet('Cashier Statistics').getCell('D2').value).toBe(100);
   });
 });

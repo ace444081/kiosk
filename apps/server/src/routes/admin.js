@@ -581,12 +581,16 @@ export function adminRoutes({
   router.get('/reports/soa.xlsx', requireAuth, async (req, res, next) => {
     try {
       const range = parseOrThrow(reportQuerySchema, req.query);
-      const reportOrders = await orders.listForReport(range);
-      const reportItems = await orders.itemsForReport(range);
+      const [reportOrders, reportItems, staffAccounts] = await Promise.all([
+        orders.listForReport(range),
+        orders.itemsForReport(range),
+        accountDirectory.listStaff(),
+      ]);
       const summary = buildSoaSummary(reportOrders, range);
       const analytics = buildDashboardAnalytics({
         orders: reportOrders,
         items: reportItems,
+        staffAccounts,
         ...range,
       });
       const [auditEvents, catalogProducts] = await Promise.all([
