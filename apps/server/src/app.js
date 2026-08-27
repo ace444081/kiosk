@@ -111,6 +111,7 @@ export function createApp({ env, db, logger = createLogger(env.logLevel) }) {
     apiRateLimit({
       windowMs: env.API_RATE_LIMIT_WINDOW_MS,
       max: env.API_RATE_LIMIT_MAX,
+      disabled: env.disableRateLimits && env.NODE_ENV !== 'production',
     }),
   );
 
@@ -122,6 +123,7 @@ export function createApp({ env, db, logger = createLogger(env.logLevel) }) {
   const loginLimit = loginRateLimit({
     max: env.LOGIN_RATE_LIMIT_MAX,
     windowMs: env.LOGIN_RATE_LIMIT_WINDOW_MS,
+    disabled: env.disableRateLimits && env.NODE_ENV !== 'production',
   });
 
   app.use('/api/v1', publicRoutes({ db, orderService, eventBus, logger, catalog, orders }));

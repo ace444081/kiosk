@@ -34,8 +34,9 @@ Money is INTEGER centavos.
 | name                             | TEXT                 | never localized                |
 | description_en / description_fil | TEXT                 | bilingual descriptions         |
 | price_centavos                   | INTEGER ≥ 0          | base price                     |
-| image_path                       | TEXT                 | placeholder asset path         |
-| is_available                     | INTEGER 0/1          | availability toggle            |
+| image_path                       | TEXT                 | local path or HTTPS image URL  |
+| is_available                     | INTEGER 0/1          | manual sales toggle            |
+| stock_quantity                   | INTEGER ≥ 0 or NULL  | NULL means inventory untracked |
 | sort_order                       | INTEGER              | within category                |
 | version                          | INTEGER default 1    | optimistic concurrency         |
 | created_at / updated_at          | TEXT                 |                                |
@@ -58,6 +59,16 @@ Compatibility matrix (provisional — see MENU_VALIDATION.md).
 | product_id | TEXT PK, FK → products (CASCADE) |
 | addon_id   | TEXT PK, FK → addons (CASCADE)   |
 
+## product_recommendations
+
+Explicit cross-sell ordering used by the review-screen recommendation module.
+
+| Column                 | Type                             |
+| ---------------------- | -------------------------------- |
+| product_id             | TEXT PK, FK → products (CASCADE) |
+| recommended_product_id | TEXT PK, FK → products (CASCADE) |
+| sort_order             | INTEGER                          |
+
 ## product_option_groups
 
 | Column                  | Type                         | Notes                |
@@ -66,7 +77,7 @@ Compatibility matrix (provisional — see MENU_VALIDATION.md).
 | product_id              | TEXT FK → products (CASCADE) |                      |
 | name_en / name_fil      | TEXT                         |                      |
 | is_required             | INTEGER 0/1                  |                      |
-| min_select / max_select | INTEGER                      | fries flavor: 1/1    |
+| min_select / max_select | INTEGER                      | fries 1/1; sugar 0/1 |
 | sort_order              | INTEGER                      |                      |
 
 ## product_options

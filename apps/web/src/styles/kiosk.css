@@ -245,6 +245,17 @@
   flex: 1;
 }
 
+.stock-note {
+  margin: var(--space-1) 0 0;
+  color: var(--color-success);
+  font-size: var(--text-xs);
+  font-weight: 800;
+}
+
+.stock-note-low {
+  color: var(--color-warning);
+}
+
 .product-card .product-footer {
   display: flex;
   align-items: center;
@@ -663,6 +674,73 @@
   gap: var(--space-4);
   margin-top: var(--space-6);
   flex-wrap: wrap;
+}
+
+.recommendations {
+  margin-top: var(--space-6);
+  padding: var(--space-5);
+  border: 1px solid #d9c7ad;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(145deg, #fffaf1, #fff);
+}
+
+.recommendations-heading > span {
+  color: var(--color-accent);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.recommendations-heading h2 {
+  margin: var(--space-1) 0;
+  color: var(--color-navy);
+}
+
+.recommendations-heading p {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.recommendation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.recommendation-card {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: #fff;
+}
+
+.recommendation-card img {
+  width: 72px;
+  height: 64px;
+  grid-row: span 2;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+.recommendation-card strong,
+.recommendation-card span {
+  display: block;
+}
+
+.recommendation-card span {
+  color: var(--color-accent);
+  font-weight: 800;
+}
+
+.recommendation-card .btn {
+  grid-column: 2;
+  justify-self: start;
 }
 
 /* ---------- Payment ---------- */

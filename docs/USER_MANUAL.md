@@ -22,6 +22,8 @@
 - Choose **required choices** when shown (e.g. Crinkled Fries flavor:
   Cheese or Sour Cream) — you cannot add the item until you choose.
 - Choose any **add-ons** (extra shot, syrup, etc.). Prices update live.
+- Drinks include a **Sugar Level** choice from 0% to 100%; the standard 100%
+  recipe is selected initially.
 - Set the **quantity** (1 to 20).
 - The **line total** updates as you go.
 - Tap **Add to cart / Idagdag sa cart**.
@@ -33,6 +35,8 @@
 - Adjust quantities, remove items, or clear the cart.
 - Tap **Review order / Suriin ang order**, check everything, then tap
   **Continue to payment / Magpatuloy sa pagbabayad**.
+- The review screen offers complementary drinks or sides. Add a simple item
+  in one tap, or open its choices directly without returning to the menu.
 
 ## 5. Pay
 
@@ -41,7 +45,7 @@ You have two choices:
 **Cash** — Tap the Cash button. Your order is created and you pay the
 total at the counter. A staff member confirms your payment.
 
-**Demo E-Wallet (simulated)** — Tap Demo E-Wallet. A demo QR and a
+**E-Wallet (Demo)** — Tap E-Wallet (Demo). A demo QR and a
 reference like `DEMO-3F9A2C81` are shown. **This is a demonstration only:
 no real money moves, no real payment happens.** Tap the button to record
 the order as a simulated e-wallet payment.

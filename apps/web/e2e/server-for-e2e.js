@@ -14,9 +14,10 @@ process.env.HOST = '127.0.0.1';
 process.env.DB_PATH = dbPath;
 process.env.SESSION_SECRET = 'e2e-session-secret-0123456789abcdef0123456789abcdef';
 process.env.LOG_LEVEL = 'warn';
-// The whole suite shares one IP (127.0.0.1); do not trip the per-IP API
-// rate limiter mid-run. Production limit stays 300/min.
+// The whole suite shares one IP (127.0.0.1); disable both limiters so browser
+// credential tests cannot be locked out. Production limits stay enabled.
 process.env.API_RATE_LIMIT_MAX = '10000';
+process.env.DISABLE_RATE_LIMITS = 'true';
 
 const { loadEnv } = await import('../../server/src/config/env.js');
 const { openDb } = await import('../../server/src/config/db.js');
@@ -26,6 +27,7 @@ const { createApp } = await import('../../server/src/app.js');
 const { AdminRepository } = await import('../../server/src/repositories/admins.js');
 const { AdminAuthService } = await import('../../server/src/services/admin-auth.js');
 const { randomId } = await import('../../server/src/security/tokens.js');
+const { LOCAL_TEST_ACCOUNTS } = await import('../../server/src/config/local-test-accounts.js');
 
 const env = loadEnv();
 const db = openDb(env.dbPath);
@@ -33,21 +35,15 @@ runMigrations(db);
 seedCatalog(db);
 
 const admins = new AdminRepository(db);
-if (!admins.findByUsername('e2e-admin')) {
-  admins.create({
-    id: randomId(),
-    username: 'e2e-admin',
-    passwordHash: AdminAuthService.hashPassword('e2e-pass-1234'),
-  });
-}
-
-if (!admins.findByUsername('e2e-staff')) {
-  admins.create({
-    id: randomId(),
-    username: 'e2e-staff',
-    passwordHash: AdminAuthService.hashPassword('e2e-staff-1234'),
-    role: 'staff',
-  });
+for (const account of LOCAL_TEST_ACCOUNTS) {
+  if (!admins.findByUsername(account.username)) {
+    admins.create({
+      id: randomId(),
+      username: account.username,
+      passwordHash: AdminAuthService.hashPassword(account.password),
+      role: account.role,
+    });
+  }
 }
 
 const { app } = createApp({ env, db });

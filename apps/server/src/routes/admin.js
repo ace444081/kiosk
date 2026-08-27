@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   adminLoginSchema,
   availabilityPatchSchema,
+  catalogPatchSchema,
   auditLogQuerySchema,
   createProductSchema,
   listOrdersQuerySchema,
@@ -40,6 +41,8 @@ function parseOrThrow(schema, data) {
 }
 
 function serializeProduct(product, categoryById) {
+  const isEnabled = product.is_available === 1;
+  const hasStock = product.stock_quantity == null || product.stock_quantity > 0;
   return {
     id: product.id,
     sku: product.sku,
@@ -48,8 +51,10 @@ function serializeProduct(product, categoryById) {
     categoryName: categoryById.get(product.category_id)?.name_en || product.category_id,
     priceCentavos: product.price_centavos,
     imagePath: product.image_path,
-    isAvailable: product.is_available === 1,
+    isAvailable: isEnabled && hasStock,
+    isEnabled,
     isPublished: product.is_published === 1,
+    stockQuantity: product.stock_quantity,
     version: product.version,
     updatedAt: product.updated_at,
   };
@@ -310,23 +315,70 @@ export function adminRoutes({
         },
         'availability changed',
       );
-      res.json({
-        product: {
-          id: updated.id,
-          isAvailable: updated.is_available === 1,
-          version: updated.version,
-          updatedAt: updated.updated_at,
-        },
-      });
+      const categoryById = new Map(
+        (await catalog.listCategories()).map((category) => [category.id, category]),
+      );
+      res.json({ product: serializeProduct(updated, categoryById) });
       eventBus.publish({
         type: EVENT_TYPES.AVAILABILITY_CHANGED,
         data: {
           productId: updated.id,
-          isAvailable: updated.is_available === 1,
+          isAvailable:
+            updated.is_available === 1 &&
+            (updated.stock_quantity == null || updated.stock_quantity > 0),
           version: updated.version,
           updatedAt: updated.updated_at,
         },
       });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.patch('/products/:id/catalog', requireAuth, requireCsrf, async (req, res, next) => {
+    try {
+      const input = parseOrThrow(catalogPatchSchema, req.body);
+      const product = await catalog.findProductById(req.params.id);
+      if (!product) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
+      if (product.version !== input.version) {
+        const categoryById = new Map(
+          (await catalog.listCategories()).map((category) => [category.id, category]),
+        );
+        return res.status(409).json({
+          error: { code: 'STALE_VERSION', message: 'Product was modified by another action' },
+          product: serializeProduct(product, categoryById),
+          requestId: req.id,
+        });
+      }
+      const updated = await catalog.updateCatalog(req.params.id, input, input.version);
+      if (!updated) throw conflict('STALE_VERSION', 'Product was modified by another action');
+      await audit.record({
+        actor: req.session.username,
+        action: 'PRODUCT_CATALOG_CHANGED',
+        targetType: 'product',
+        targetId: updated.id,
+        previousState: {
+          imagePath: product.image_path,
+          stockQuantity: product.stock_quantity,
+          version: product.version,
+        },
+        newState: {
+          imagePath: updated.image_path,
+          stockQuantity: updated.stock_quantity,
+          version: updated.version,
+        },
+        requestId: req.id,
+        ip: req.ip,
+        userAgent: req.get('User-Agent'),
+      });
+      const categoryById = new Map(
+        (await catalog.listCategories()).map((category) => [category.id, category]),
+      );
+      eventBus.publish({
+        type: EVENT_TYPES.CATALOG_CHANGED,
+        data: { productId: updated.id, action: 'catalog_changed', version: updated.version },
+      });
+      res.json({ product: serializeProduct(updated, categoryById) });
     } catch (err) {
       next(err);
     }
@@ -379,6 +431,7 @@ export function adminRoutes({
           isPublished: product.is_published === 1,
           isAvailable: product.is_available === 1,
           priceCentavos: product.price_centavos,
+          stockQuantity: product.stock_quantity,
         },
         requestId: req.id,
         ip: req.ip,

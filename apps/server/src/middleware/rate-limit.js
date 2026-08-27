@@ -3,7 +3,8 @@ import { tooManyRequests } from '../utils/app-error.js';
 import { LoginRateLimiter } from '../services/admin-auth.js';
 
 /** General API rate limiter (per IP). */
-export function apiRateLimit({ windowMs = 60_000, max = 300 } = {}) {
+export function apiRateLimit({ windowMs = 60_000, max = 300, disabled = false } = {}) {
+  if (disabled) return (_req, _res, next) => next();
   return rateLimit({
     windowMs,
     max,
@@ -24,11 +25,15 @@ export function apiRateLimit({ windowMs = 60_000, max = 300 } = {}) {
  * Login limiter keyed by IP+username, counting FAILED attempts only
  * (5 per pair per 15 minutes). Success resets the pair.
  */
-export function loginRateLimit({ max = 5, windowMs = 15 * 60 * 1000 } = {}) {
-  const limiter = new LoginRateLimiter({ max, windowMs });
+export function loginRateLimit({ max = 5, windowMs = 15 * 60 * 1000, disabled = false } = {}) {
+  const limiter = new LoginRateLimiter({ max, windowMs, disabled });
   return {
     limiter,
     middleware(req, res, next) {
+      if (disabled) {
+        req.loginLimiter = limiter;
+        return next();
+      }
       const username = req.body?.username || '';
       if (limiter.isBlocked(req.ip, username)) {
         const err = tooManyRequests(

@@ -101,6 +101,57 @@ export const FRIES_FLAVOR_GROUP = {
   ],
 };
 
+/**
+ * Beverage sweetness choice requested for the kiosk. The customer UI defaults
+ * to the standard 100% recipe while allowing a lower level; percentages are
+ * price-neutral and the selected value is snapshotted for kitchen staff.
+ */
+export const SUGAR_LEVEL_GROUP = {
+  sku: 'sugar-level',
+  nameEn: 'Sugar Level',
+  nameFil: 'Antas ng Asukal',
+  isRequired: false,
+  minSelect: 0,
+  maxSelect: 1,
+  sortOrder: 10,
+  options: [0, 25, 50, 75, 100].map((percent, index) => ({
+    sku: `sugar-${percent}`,
+    nameEn: `${percent}%`,
+    nameFil: `${percent}%`,
+    priceCentavos: 0,
+    sortOrder: index + 1,
+  })),
+};
+
+export const BEVERAGE_CATEGORIES = new Set(['drip-coffee', 'espresso', 'ice-shaken', 'non-coffee']);
+
+/**
+ * Cross-sell relationships shown on order review. These are provisional cafe
+ * defaults and remain data-driven so client-approved pairings can replace
+ * them without changing recommendation UI logic.
+ */
+export function buildRecommendationPairs(products = PRODUCTS) {
+  const foodSuggestions = ['cafe-latte', 'honey-calamansi', 'ube-latte'];
+  const drinkSuggestions = ['creamcheese-garlic-bun', 'hashbrown-2pc', 'crinkled-fries'];
+  const productIds = new Set(products.map((product) => product.sku));
+  const pairs = [];
+  for (const product of products) {
+    const suggestions = BEVERAGE_CATEGORIES.has(product.categorySlug)
+      ? drinkSuggestions
+      : foodSuggestions;
+    suggestions.forEach((recommendedProductId, index) => {
+      if (recommendedProductId !== product.sku && productIds.has(recommendedProductId)) {
+        pairs.push({
+          productId: product.sku,
+          recommendedProductId,
+          sortOrder: index + 1,
+        });
+      }
+    });
+  }
+  return pairs;
+}
+
 export const PRODUCTS = [
   // --- Pasta ---------------------------------------------------------------
   {
@@ -500,9 +551,15 @@ export function buildSeedMenu() {
   const products = PRODUCTS.map((p) => ({
     ...p,
     imagePath: `/placeholders/products/${productImageSlug(p)}.svg`,
-    optionGroups: p.optionGroups
-      ? p.optionGroups.map((g) => ({ ...g, options: g.options.map((o) => ({ ...o })) }))
-      : [],
+    optionGroups: [
+      ...(p.optionGroups || []),
+      ...(BEVERAGE_CATEGORIES.has(p.categorySlug) ? [SUGAR_LEVEL_GROUP] : []),
+    ].map((g) => ({ ...g, options: g.options.map((o) => ({ ...o })) })),
   }));
-  return { categories, products, addons: ADDONS.map((a) => ({ ...a })) };
+  return {
+    categories,
+    products,
+    addons: ADDONS.map((a) => ({ ...a })),
+    recommendations: buildRecommendationPairs(products),
+  };
 }

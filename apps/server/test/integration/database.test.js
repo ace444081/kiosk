@@ -1,6 +1,7 @@
 import { describe, expect, it, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { makeTestDb, makeTempDbPath } from '../utils.js';
 import { openDb } from '../../src/config/db.js';
 import { runMigrations, listAppliedMigrations } from '../../src/db/migrate.js';
@@ -64,6 +65,7 @@ describe('database behaviors', () => {
       '007_integrity_polish',
       '008_station_workflow',
       '009_deployment_identity',
+      '010_inventory_recommendations',
       '010_unify_staff_roles',
       '011_cashier_attribution',
     ]);
@@ -78,6 +80,82 @@ describe('database behaviors', () => {
         'deployment_id',
       ]),
     );
+    cleanup();
+  });
+
+  it('upgrades an existing populated catalog with sugar choices and recommendations', () => {
+    const { dbPath, cleanup } = makeTempDbPath('kiosk-upgrade');
+    const db = track(openDb(dbPath));
+    db.exec(`
+      CREATE TABLE categories (id TEXT PRIMARY KEY);
+      CREATE TABLE products (
+        id TEXT PRIMARY KEY,
+        category_id TEXT NOT NULL REFERENCES categories(id),
+        sku TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        description_en TEXT NOT NULL DEFAULT '',
+        description_fil TEXT NOT NULL DEFAULT '',
+        price_centavos INTEGER NOT NULL DEFAULT 0,
+        image_path TEXT NOT NULL DEFAULT '',
+        is_available INTEGER NOT NULL DEFAULT 1,
+        is_published INTEGER NOT NULL DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        version INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL DEFAULT ''
+      );
+      CREATE TABLE product_option_groups (
+        id TEXT PRIMARY KEY,
+        product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+        name_en TEXT NOT NULL,
+        name_fil TEXT NOT NULL,
+        is_required INTEGER NOT NULL DEFAULT 0,
+        min_select INTEGER NOT NULL DEFAULT 0,
+        max_select INTEGER NOT NULL DEFAULT 0,
+        sort_order INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE TABLE product_options (
+        id TEXT PRIMARY KEY,
+        group_id TEXT NOT NULL REFERENCES product_option_groups(id) ON DELETE CASCADE,
+        name_en TEXT NOT NULL,
+        name_fil TEXT NOT NULL,
+        price_centavos INTEGER NOT NULL DEFAULT 0,
+        sort_order INTEGER NOT NULL DEFAULT 0
+      );
+      INSERT INTO categories (id) VALUES ('drip-coffee'), ('snacks'), ('ice-shaken'), ('non-coffee');
+      INSERT INTO products (id, category_id, sku, name) VALUES
+        ('cafe-latte', 'drip-coffee', 'cafe-latte', 'Cafe Latte'),
+        ('honey-calamansi', 'ice-shaken', 'honey-calamansi', 'Honey Calamansi'),
+        ('ube-latte', 'non-coffee', 'ube-latte', 'Ube Latte'),
+        ('creamcheese-garlic-bun', 'snacks', 'creamcheese-garlic-bun', 'Garlic Bun'),
+        ('hashbrown-2pc', 'snacks', 'hashbrown-2pc', 'Hashbrown'),
+        ('crinkled-fries', 'snacks', 'crinkled-fries', 'Crinkled Fries');
+    `);
+    const migrationPath = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../../src/db/migrations/010_inventory_recommendations.sql',
+    );
+    db.exec(fs.readFileSync(migrationPath, 'utf8'));
+
+    expect(db.pragma('table_info(products)').map((column) => column.name)).toContain(
+      'stock_quantity',
+    );
+    expect(
+      db
+        .prepare(
+          "SELECT COUNT(*) AS n FROM product_options WHERE group_id = 'cafe-latte__sugar-level'",
+        )
+        .get().n,
+    ).toBe(5);
+    expect(
+      db
+        .prepare(
+          "SELECT COUNT(*) AS n FROM product_recommendations WHERE product_id = 'hashbrown-2pc'",
+        )
+        .get().n,
+    ).toBe(3);
+    open.splice(open.indexOf(db), 1);
+    db.close();
     cleanup();
   });
 

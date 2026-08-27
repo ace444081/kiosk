@@ -10,6 +10,7 @@ import { badRequest, conflict, notFound } from '../utils/app-error.js';
 import { EVENT_TYPES } from '../events/event-types.js';
 import { PgCatalogRepository, PgOrderRepository } from './repositories.js';
 import { allocatePostgresOrderNumber } from './order-number.js';
+import { addStockFieldErrors, aggregateStockRequirements } from '../domain/inventory.js';
 
 export class PgOrderService {
   constructor({ db, eventBus, audit, deploymentId = 'cloud-fallback' }) {
@@ -95,6 +96,10 @@ export class PgOrderService {
         fieldErrors[`items.${index}.productId`] = 'PRODUCT_UNAVAILABLE';
         continue;
       }
+      if (product.stock_quantity != null && product.stock_quantity <= 0) {
+        fieldErrors[`items.${index}.quantity`] = 'INSUFFICIENT_STOCK';
+        continue;
+      }
       if (new Set(addonIds).size !== addonIds.length) {
         fieldErrors[`items.${index}.addonIds`] = 'DUPLICATE_ADDON';
         continue;
@@ -177,6 +182,11 @@ export class PgOrderService {
     }
     if (Object.keys(fieldErrors).length)
       throw badRequest('VALIDATION_ERROR', 'Order items failed validation', fieldErrors);
+    const stockFailure = await catalog.reserveStock(aggregateStockRequirements(items));
+    if (stockFailure) {
+      addStockFieldErrors(fieldErrors, input.items, stockFailure.productId);
+      throw badRequest('VALIDATION_ERROR', 'Not enough stock for this order', fieldErrors);
+    }
     const subtotalCentavos = items.reduce((sum, item) => sum + item.lineTotalCentavos, 0);
     const paymentStatus = input.paymentMethod === 'cash' ? 'pending_cash' : 'demo_confirmed';
     const order = await orders.insert({
@@ -274,13 +284,26 @@ export class PgOrderService {
         'Cash order cannot be completed until cash is received',
         { order: this.serializeOrder(await this.orders.detail(orderId)) },
       );
-    const updated = await this.orders.updateStatus(orderId, newStatus, {
+    const statusTimes = {
       version,
       preparingAt: newStatus === 'preparing' ? new Date().toISOString() : undefined,
       readyAt: newStatus === 'ready' ? new Date().toISOString() : undefined,
       completedAt: newStatus === 'completed' ? new Date().toISOString() : undefined,
       cancelledAt: newStatus === 'cancelled' ? new Date().toISOString() : undefined,
-    });
+    };
+    let updated;
+    if (newStatus === 'cancelled' && order.status === 'placed') {
+      updated = await this.db.transaction(async (tx) => {
+        const txOrders = new PgOrderRepository(tx);
+        const txCatalog = new PgCatalogRepository(tx);
+        const next = await txOrders.updateStatus(orderId, newStatus, statusTimes);
+        if (!next) return null;
+        await txCatalog.releaseStock(await txOrders.itemsForOrder(orderId));
+        return next;
+      });
+    } else {
+      updated = await this.orders.updateStatus(orderId, newStatus, statusTimes);
+    }
     if (!updated) throw conflict('STALE_VERSION', 'Order was modified by another action');
     await this.audit.record({
       actor,
@@ -299,6 +322,12 @@ export class PgOrderService {
     });
     const serialized = this.serializeOrder(await this.orders.detail(orderId));
     this.eventBus.publish({ type: EVENT_TYPES.ORDER_UPDATED, data: serialized });
+    if (newStatus === 'cancelled' && order.status === 'placed') {
+      this.eventBus.publish({
+        type: EVENT_TYPES.CATALOG_CHANGED,
+        data: { action: 'inventory_restored', orderId },
+      });
+    }
     return serialized;
   }
 

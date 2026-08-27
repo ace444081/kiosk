@@ -9,7 +9,8 @@ production POS. The following are intentional limitations of this version.
   integration; no real merchant QR codes; no real transfer confirmation.
   Demo e-wallet payments are simulated and labeled as such everywhere.
 - **VAT, senior/PWD discounts, promotions, coupons** — none.
-- **Inventory/ingredient deduction** — none.
+- **Ingredient-level recipes/deduction** — inventory is tracked by finished
+  product quantity, not by flour, milk, syrups, or other ingredients.
 - **Customer accounts / personal-data collection** — none; the kiosk never
   asks for personal information.
 - **Delivery / table service** — counter pickup only.
@@ -22,10 +23,10 @@ production POS. The following are intentional limitations of this version.
 
 ## Product limitations of this version
 
-1. **Menu editing** — admins can create products, publish/hide products, and
-   toggle availability. Editing the price, name, category, description, or
-   modifier structure of an existing product still requires a code change +
-   reseed (documented in MENU_VALIDATION.md).
+1. **Menu editing** — admins can create products, update product pictures,
+   stock quantities, publish/hide products, and toggle availability. Editing
+   the price, name, category, description, modifier structure, or recommendation
+   pairings of an existing product still requires a code change + reseed.
 2. **Add-on compatibility matrix is provisional** and requires client
    confirmation before the pilot menu is finalized.
 3. **No refunds** — once completed or cancelled, orders are final.
@@ -37,10 +38,10 @@ production POS. The following are intentional limitations of this version.
    attempt counters (acceptable for a single supervised site).
 7. **SSE events are in-process** — if the server restarts, connected admin
    pages fall back to 5-second polling automatically.
-8. **Placeholder brand assets** — logo, product images, category art, and
+8. **Placeholder brand assets** — logo, initial product images, category art, and
    the demo QR are locally generated placeholders under
-   `apps/web/public/placeholders/` and `apps/web/public/icons/`; replace
-   them in place with client assets (no logic changes needed).
+   `apps/web/public/placeholders/` and `apps/web/public/icons/`; replace them
+   through the admin picture control or in place with client assets.
 9. **Kiosk preview totals are UI-computed** — the API remains
    authoritative; server prices always win (verified by tests).
 10. **No physical-device verification was performed** — Android/iPadOS

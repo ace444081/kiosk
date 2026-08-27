@@ -19,14 +19,21 @@
    username exists).
 4. Use **Sign out** when done; the session is destroyed server-side.
 
+For local testing, the browser-test fixture provides `e2e-admin` /
+`e2e-pass-1234`. This account is disposable test data, not a production
+credential.
+
+The unified staff workboard uses `e2e-staff` / `e2e-staff-1234` for local
+testing; choose the Payment, Preparation, or Handoff lane after signing in.
+
 ## 3. Dashboard
 
 The Operations and Sales dashboard supports Today, Yesterday, the last 7 days,
 the last 30 days, or a custom business-date range. Business dates use
 Asia/Manila.
 
-- **Real cash sales**, completed orders, average order value, pending cash,
-  and simulated demo-wallet totals are shown separately.
+- **Real cash sales**, completed orders, pending cash, and **E-Wallet (Demo)**
+  totals are shown separately.
 - Workflow mix shows **Placed / Preparing / Ready / Completed / Cancelled**.
 - Daily activity, top products, service times, and active exceptions support
   the owner review.
@@ -82,6 +89,11 @@ Open an order to see all items, add-ons, choices, and totals.
 - **Mark available** re-enables it immediately.
 - The **Updated** timestamp helps staff know when availability last
   changed.
+- Use **Picture & stock** to change the product image path/HTTPS URL or enter
+  the remaining finished-product quantity. Leave stock blank for untracked
+  inventory; `0` makes the item unavailable by stock.
+- Accepted orders deduct stock atomically. Cancelling while still **Placed**
+  restores it; cancellation after preparation has begun does not.
 
 ## 7. Operations workbook
 
@@ -102,7 +114,7 @@ session data, customer names, or contact fields.
 
 ## 8. What staff CANNOT do in this version
 
-- Edit prices, names, categories, or add-ons (by design — ask the
+- Edit prices, names, categories, add-ons, or recommendation pairings (ask the
   operator).
 - Issue refunds (no refunds exist in the pilot).
 - See or cancel completed orders (completed cannot reopen; cancelled

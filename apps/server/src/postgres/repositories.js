@@ -157,11 +157,25 @@ export class PgCatalogRepository {
     ]);
     const productIds = products.map((product) => product.id);
     if (!productIds.length) {
-      return { categories, products, addons, productAddonRows: [], optionGroups: [], options: [] };
+      return {
+        categories,
+        products,
+        addons,
+        productAddonRows: [],
+        recommendationRows: [],
+        optionGroups: [],
+        options: [],
+      };
     }
-    const [productAddonRows, optionGroups] = await Promise.all([
+    const [productAddonRows, recommendationRows, optionGroups] = await Promise.all([
       this.db.many(
         'SELECT product_id, addon_id FROM product_addons WHERE product_id = ANY($1::text[])',
+        [productIds],
+      ),
+      this.db.many(
+        `SELECT product_id, recommended_product_id, sort_order
+         FROM product_recommendations WHERE product_id = ANY($1::text[])
+         ORDER BY product_id, sort_order`,
         [productIds],
       ),
       this.db.many(
@@ -176,6 +190,7 @@ export class PgCatalogRepository {
       products,
       addons,
       productAddonRows,
+      recommendationRows,
       optionGroups: optionGroups.map((group) => ({
         ...group,
         is_required: bool(group.is_required),
@@ -266,13 +281,60 @@ export class PgCatalogRepository {
     return normalizeCatalog(row);
   }
 
+  async updateCatalog(productId, { imagePath, stockQuantity }, expectedVersion) {
+    return normalizeCatalog(
+      await this.db.one(
+        `UPDATE products SET image_path = $1, stock_quantity = $2, version = version + 1,
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = $3 AND version = $4 RETURNING *`,
+        [imagePath, stockQuantity, productId, expectedVersion],
+      ),
+    );
+  }
+
+  async reserveStock(requirements) {
+    for (const { productId, quantity } of requirements) {
+      const product = await this.db.one(
+        'SELECT stock_quantity FROM products WHERE id = $1 FOR UPDATE',
+        [productId],
+      );
+      if (product?.stock_quantity == null) continue;
+      if (product.stock_quantity < quantity) {
+        return { productId, remaining: product.stock_quantity };
+      }
+      await this.db.query(
+        `UPDATE products SET stock_quantity = stock_quantity - $1, version = version + 1,
+           updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+        [quantity, productId],
+      );
+    }
+    return null;
+  }
+
+  async releaseStock(items) {
+    const quantities = new Map();
+    for (const item of items) {
+      quantities.set(item.product_id, (quantities.get(item.product_id) || 0) + item.quantity);
+    }
+    for (const [productId, quantity] of [...quantities].sort(([left], [right]) =>
+      left.localeCompare(right),
+    )) {
+      await this.db.query(
+        `UPDATE products SET stock_quantity = stock_quantity + $1, version = version + 1,
+           updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2 AND stock_quantity IS NOT NULL`,
+        [quantity, productId],
+      );
+    }
+  }
+
   async createProduct(input) {
     const product = await this.db.transaction(async (tx) => {
       await tx.query(
         `INSERT INTO products
           (id, category_id, sku, name, description_en, description_fil, price_centavos,
-           image_path, is_available, is_published, sort_order, version)
-         VALUES ($1, $2, $1, $3, $4, $5, $6, $7, $8, $9, $10, 1)`,
+           image_path, is_available, is_published, stock_quantity, sort_order, version)
+         VALUES ($1, $2, $1, $3, $4, $5, $6, $7, $8, $9, $10, $11, 1)`,
         [
           input.sku,
           input.categoryId,
@@ -283,6 +345,7 @@ export class PgCatalogRepository {
           input.imagePath,
           input.isAvailable,
           input.isPublished,
+          input.stockQuantity,
           input.sortOrder,
         ],
       );
@@ -354,8 +417,9 @@ export class PgCatalogRepository {
       add('(name ILIKE $value OR sku ILIKE $value)', `%${search}%`);
     }
     if (category && category !== 'all') add('category_id = $value', category);
-    if (availability === 'available') clauses.push('is_available = TRUE');
-    if (availability === 'sold_out') clauses.push('is_available = FALSE');
+    if (availability === 'available')
+      clauses.push('is_available = TRUE AND (stock_quantity IS NULL OR stock_quantity > 0)');
+    if (availability === 'sold_out') clauses.push('(is_available = FALSE OR stock_quantity = 0)');
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
     const rows = await this.db.many(
       `SELECT * FROM products ${where} ORDER BY sort_order, name LIMIT 500`,

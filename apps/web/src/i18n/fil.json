@@ -51,7 +51,8 @@
     "total": "Kabuuan",
     "checkout": "Suriin ang order",
     "backToMenu": "Bumalik sa menu",
-    "productUnavailable": "Kasalukuyang hindi available ang item na ito."
+    "productUnavailable": "Kasalukuyang hindi available ang item na ito.",
+    "stockRemaining": "{{count}} na lang"
   },
   "customize": {
     "title": "I-customize",
@@ -64,7 +65,9 @@
     "addToCart": "Idagdag sa cart",
     "invalidQuantity": "Ang bilang ay dapat 1 hanggang 20.",
     "selectRequired": "Mangyaring pumili.",
-    "backToMenu": "Bumalik sa menu"
+    "backToMenu": "Bumalik sa menu",
+    "maximumQuantity": "Naabot na ang pinakamataas na bilang.",
+    "stockLimit": "{{count}} na lang ang available."
   },
   "cart": {
     "title": "Ang Iyong Cart",
@@ -93,7 +96,12 @@
     "continueToPayment": "Magpatuloy sa pagbabayad",
     "emptyTitle": "Walang laman ang iyong cart",
     "emptyBody": "Mangyaring magdagdag ng mga item bago magpatuloy.",
-    "invalidCart": "Ang ilang item sa iyong cart ay hindi na available. Pakisuri."
+    "invalidCart": "Ang ilang item sa iyong cart ay hindi na available. Pakisuri.",
+    "recommendedEyebrow": "Kumpletuhin ang order",
+    "recommendedAddons": "Inirerekomendang add-on",
+    "recommendedHint": "Magdagdag ng side o inumin dito nang hindi bumabalik sa menu.",
+    "addRecommendation": "Idagdag",
+    "customizeAddon": "Pumili ng options"
   },
   "payment": {
     "title": "Pagbabayad",
@@ -101,8 +109,8 @@
     "cashTitle": "Magbayad ng Cash",
     "cashDescription": "Magbayad sa counter pagkatapos mag-order.",
     "cashInstruction": "I-order, pagkatapos ay bayaran ang kabuuang halaga sa counter. Kukumpirmahin ng staff ang iyong pagbabayad.",
-    "demoWallet": "Demo E-Wallet",
-    "demoWalletTitle": "Demo e-wallet (simulado)",
+    "demoWallet": "E-Wallet (Demo)",
+    "demoWalletTitle": "E-Wallet (Demo)",
     "demoWalletDescription": "I-scan ang demo QR sa susunod na screen. Walang tunay na perang gumagalaw.",
     "demoWarningTitle": "DEMO LANG — HINDI TUNAY NA PAGBAYAD",
     "demoWarningBody": "Ito ay simulado na e-wallet para sa pilot kiosk. Walang tunay na transaksyon, walang kukuning pera, at hindi ito tunay na merchant QR.",
@@ -170,6 +178,7 @@
     "EMPTY_CART": "Walang laman ang iyong cart.",
     "PRODUCT_NOT_FOUND": "Wala na sa menu ang isang item.",
     "PRODUCT_UNAVAILABLE": "Ubos na ang isang item sa iyong cart.",
+    "INSUFFICIENT_STOCK": "Hindi sapat ang stock para sa hinihinging bilang. Bawasan ito at subukan muli.",
     "ADDON_NOT_FOUND": "Wala na ang isang napiling add-on.",
     "ADDON_INCOMPATIBLE": "Hindi maidaragdag ang napiling add-on sa item na ito.",
     "OPTION_NOT_FOUND": "Wala na ang isang napiling pagpipilian.",
@@ -217,6 +226,11 @@
     "loginTitle": "Pag-sign in ng Administrator",
     "username": "Username",
     "password": "Password",
+    "showPassword": "Ipakita ang password",
+    "hidePassword": "Itago ang password",
+    "localTesting": "Mga account para sa local testing",
+    "localAdminCredential": "Admin: e2e-admin / e2e-pass-1234",
+    "localStationCredential": "Staff workboard: e2e-staff / e2e-staff-1234",
     "login": "Mag-sign in",
     "loginError": "Mali ang username o password.",
     "loginRateLimited": "Masyadong maraming nabigong pagsubok. Subukan muli sa {{seconds}}s.",
@@ -389,7 +403,7 @@
     "invalidDateRange": "Hindi maaaring mauna ang end date kaysa start date.",
     "cashReceived": "Cash received (completed)",
     "pendingCashValue": "Nakabinbing cash",
-    "demoWalletSimulated": "Demo wallet (simulado)",
+    "demoWalletSimulated": "E-Wallet (Demo)",
     "soaDemoNotice": "Simulated pilot data ang demo wallet. Para lamang ito sa reconciliation at hindi kailanman kasama sa tunay na natanggap na cash.",
     "anonymousOrderNote": "Hindi kumukuha ang kiosk ng pangalan ng customer. Order number lamang ang pagkakakilanlan sa SOA.",
     "menuManageIntro": "Gumawa ng kumpletong kiosk item, panatilihing draft, o pamahalaan ang nakikita ng customer.",
@@ -439,7 +453,17 @@
     "publishUnavailable": "I-publish ngunit unavailable",
     "publishAvailable": "I-publish at gawing available",
     "createProduct": "Gumawa ng menu item",
-    "productCreateError": "Hindi magawa ang menu item. Suriin ang lahat ng required field."
+    "productCreateError": "Hindi magawa ang menu item. Suriin ang lahat ng required field.",
+    "catalogControls": "Larawan at inventory",
+    "catalogControlsHint": "I-update ang larawan na makikita ng customer at ang bilang na maaaring i-order.",
+    "productPicture": "Larawan ng produkto",
+    "inventory": "Inventory",
+    "stockQuantity": "Bilang ng stock",
+    "stockQuantityHint": "Iwanang blangko kung hindi ita-track. Ilagay ang 0 para markahang ubos ayon sa stock.",
+    "untrackedInventory": "Hindi tina-track",
+    "stockRemaining": "{{count}} ang natitira",
+    "manageCatalog": "Larawan at stock",
+    "catalogUpdateError": "Hindi ma-update ang larawan o inventory ng produkto."
   },
   "print": {
     "demoWatermark": "DEMO — SIMULADONG PAGBAYAD"

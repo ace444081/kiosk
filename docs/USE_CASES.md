@@ -56,7 +56,7 @@
 
 ### UC-06 Place a demo e-wallet order (simulated)
 
-1. Customer chooses **Demo E-Wallet**.
+1. Customer chooses **E-Wallet (Demo)**.
 2. A clearly labeled demo QR and `DEMO-XXXXXXXX` reference appear with
    prominent EN/FIL "DEMO ONLY — NOT A REAL PAYMENT" warnings.
 3. Customer confirms; the order is created as `demo_confirmed`.

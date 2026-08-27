@@ -5,6 +5,7 @@ import { api } from '../services/api.js';
 import { adminPatch } from '../services/admin-api.js';
 import { ConfirmDialog, ProductImage } from '../components/KioskBits.jsx';
 import { AdminProductFormDialog } from './AdminProductFormDialog.jsx';
+import { AdminCatalogDialog } from './AdminCatalogDialog.jsx';
 
 function formatUpdatedAt(iso, locale) {
   try {
@@ -31,6 +32,7 @@ export function AdminMenu() {
   const [availabilityFilter, setAvailabilityFilter] = useState('all');
   const [confirm, setConfirm] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -205,6 +207,11 @@ export function AdminMenu() {
                 <div className="product-admin-meta">
                   {product.categoryName} · {formatPeso(product.priceCentavos)}
                   <br />
+                  {t('admin.inventory')}:{' '}
+                  {product.stockQuantity == null
+                    ? t('admin.untrackedInventory')
+                    : t('admin.stockRemaining', { count: product.stockQuantity })}
+                  <br />
                   {t('admin.lastUpdated')}: {formatUpdatedAt(product.updatedAt, locale)}
                 </div>
                 <div className="product-statuses">
@@ -221,6 +228,14 @@ export function AdminMenu() {
                 </div>
               </div>
               <div className="product-admin-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={busy}
+                  onClick={() => setEditingProduct(product)}
+                >
+                  {t('admin.manageCatalog')}
+                </button>
                 {!product.isPublished ? (
                   <button
                     type="button"
@@ -234,17 +249,19 @@ export function AdminMenu() {
                   <>
                     <button
                       type="button"
-                      className={`btn ${product.isAvailable ? 'btn-danger' : 'btn-success'}`}
+                      className={`btn ${(product.isEnabled ?? product.isAvailable) ? 'btn-danger' : 'btn-success'}`}
                       disabled={busy}
                       onClick={() =>
                         setConfirm({
                           type: 'availability',
                           product,
-                          isAvailable: !product.isAvailable,
+                          isAvailable: !(product.isEnabled ?? product.isAvailable),
                         })
                       }
                     >
-                      {product.isAvailable ? t('admin.markSoldOut') : t('admin.markAvailable')}
+                      {(product.isEnabled ?? product.isAvailable)
+                        ? t('admin.markSoldOut')
+                        : t('admin.markAvailable')}
                     </button>
                     <button
                       type="button"
@@ -302,6 +319,16 @@ export function AdminMenu() {
           onCreated={() => {
             setShowForm(false);
             load();
+          }}
+        />
+      )}
+      {editingProduct && (
+        <AdminCatalogDialog
+          product={editingProduct}
+          onClose={() => setEditingProduct(null)}
+          onSaved={(product) => {
+            mergeProduct(product);
+            setEditingProduct(null);
           }}
         />
       )}

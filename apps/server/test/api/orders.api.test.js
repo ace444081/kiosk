@@ -37,6 +37,17 @@ describe('public API - menu, orders, receipts, health', () => {
       expect(fries.priceCentavos).toBe(6500);
       expect(fries.optionGroups[0].options.map((o) => o.name)).toEqual(['Cheese', 'Sour Cream']);
       expect(fries.description).toContain('fries');
+      const dripCoffee = res.body.categories.find((c) => c.id === 'drip-coffee');
+      const latte = dripCoffee.products.find((p) => p.id === 'cafe-latte');
+      const sugar = latte.optionGroups.find((group) => group.name === 'Sugar Level');
+      expect(sugar.options.map((option) => option.name)).toEqual([
+        '0%',
+        '25%',
+        '50%',
+        '75%',
+        '100%',
+      ]);
+      expect(latte.recommendationIds).toContain('hashbrown-2pc');
     });
 
     it('localizes descriptions and names to fil', async () => {
@@ -219,6 +230,60 @@ describe('public API - menu, orders, receipts, health', () => {
         .set('Idempotency-Key', idem())
         .send(payload);
       expect(next.body.dailySequence).toBe(2);
+    });
+
+    it('reserves tracked stock once and rejects a later oversized order', async () => {
+      ctx.db.prepare('UPDATE products SET stock_quantity = 3 WHERE id = ?').run('hashbrown-2pc');
+      const first = await request(ctx.app)
+        .post('/api/v1/orders')
+        .set('Idempotency-Key', idem())
+        .send({
+          locale: 'en',
+          paymentMethod: 'cash',
+          items: [{ productId: 'hashbrown-2pc', quantity: 2 }],
+        });
+      expect(first.status).toBe(201);
+      expect(
+        ctx.db.prepare('SELECT stock_quantity FROM products WHERE id = ?').get('hashbrown-2pc')
+          .stock_quantity,
+      ).toBe(1);
+
+      const rejected = await request(ctx.app)
+        .post('/api/v1/orders')
+        .set('Idempotency-Key', idem())
+        .send({
+          locale: 'en',
+          paymentMethod: 'cash',
+          items: [{ productId: 'hashbrown-2pc', quantity: 2 }],
+        });
+      expect(rejected.status).toBe(400);
+      expect(rejected.body.error.fieldErrors['items.0.quantity']).toBe('INSUFFICIENT_STOCK');
+      expect(
+        ctx.db.prepare('SELECT stock_quantity FROM products WHERE id = ?').get('hashbrown-2pc')
+          .stock_quantity,
+      ).toBe(1);
+    });
+
+    it('aggregates stock across customized lines and rolls back a failed reservation', async () => {
+      ctx.db.prepare('UPDATE products SET stock_quantity = 2 WHERE id = ?').run('cafe-latte');
+      const rejected = await request(ctx.app)
+        .post('/api/v1/orders')
+        .set('Idempotency-Key', idem())
+        .send({
+          locale: 'en',
+          paymentMethod: 'cash',
+          items: [
+            { productId: 'cafe-latte', quantity: 1 },
+            { productId: 'cafe-latte', quantity: 2, addonIds: ['addon-espresso-shot'] },
+          ],
+        });
+      expect(rejected.status).toBe(400);
+      expect(rejected.body.error.fieldErrors['items.0.quantity']).toBe('INSUFFICIENT_STOCK');
+      expect(rejected.body.error.fieldErrors['items.1.quantity']).toBe('INSUFFICIENT_STOCK');
+      expect(
+        ctx.db.prepare('SELECT stock_quantity FROM products WHERE id = ?').get('cafe-latte')
+          .stock_quantity,
+      ).toBe(2);
     });
   });
 

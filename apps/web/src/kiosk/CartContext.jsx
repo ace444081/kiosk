@@ -79,18 +79,32 @@ export function CartProvider({ children }) {
         const unitTotal = item.unitTotalCentavos ?? item.unitPriceCentavos;
         const key = lineKey(item);
         const existing = prev.find((i) => lineKey(i) === key);
+        const currentProductQuantity = prev
+          .filter((i) => i.productId === item.productId)
+          .reduce((sum, i) => sum + i.quantity, 0);
+        const stockRemaining =
+          item.stockQuantity == null
+            ? Number.POSITIVE_INFINITY
+            : Math.max(0, item.stockQuantity - currentProductQuantity);
+        const quantityToAdd = Math.min(item.quantity, stockRemaining);
+        if (quantityToAdd <= 0) return prev;
         if (existing) {
+          const nextQuantity = Math.min(MAX_QUANTITY, existing.quantity + quantityToAdd);
           return prev.map((i) =>
             i === existing
               ? {
                   ...i,
-                  quantity: Math.min(MAX_QUANTITY, i.quantity + item.quantity),
-                  lineTotalCentavos: unitTotal * Math.min(MAX_QUANTITY, i.quantity + item.quantity),
+                  stockQuantity: item.stockQuantity,
+                  quantity: nextQuantity,
+                  lineTotalCentavos: unitTotal * nextQuantity,
                 }
               : i,
           );
         }
-        return [...prev, { ...item, lineTotalCentavos: unitTotal * item.quantity }];
+        return [
+          ...prev,
+          { ...item, quantity: quantityToAdd, lineTotalCentavos: unitTotal * quantityToAdd },
+        ];
       });
       announce('cart.addedAnnouncement', { name: item.name });
     },
@@ -102,7 +116,14 @@ export function CartProvider({ children }) {
       prev
         .map((i) => {
           if (i.key !== key) return i;
-          const quantity = Math.max(1, Math.min(MAX_QUANTITY, i.quantity + delta));
+          const otherProductQuantity = prev
+            .filter((other) => other.key !== i.key && other.productId === i.productId)
+            .reduce((sum, other) => sum + other.quantity, 0);
+          const stockLimit =
+            i.stockQuantity == null
+              ? MAX_QUANTITY
+              : Math.max(1, i.stockQuantity - otherProductQuantity);
+          const quantity = Math.max(1, Math.min(MAX_QUANTITY, stockLimit, i.quantity + delta));
           const unitTotal = i.unitTotalCentavos ?? i.unitPriceCentavos;
           return { ...i, quantity, lineTotalCentavos: unitTotal * quantity };
         })

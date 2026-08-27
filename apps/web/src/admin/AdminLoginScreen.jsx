@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ApiError } from '../services/api.js';
 import { adminLogin } from '../services/admin-api.js';
+import { PasswordField } from '../components/PasswordField.jsx';
 
 export function AdminLoginScreen() {
   const { t } = useTranslation();
@@ -52,15 +53,23 @@ export function AdminLoginScreen() {
 
         <div className="form-field">
           <label htmlFor="admin-password">{t('admin.password')}</label>
-          <input
+          <PasswordField
             id="admin-password"
-            type="password"
-            autoComplete="current-password"
+            label={t('admin.password')}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            required
+            showLabel={t('admin.showPassword')}
+            hideLabel={t('admin.hidePassword')}
           />
         </div>
+
+        {import.meta.env.DEV && (
+          <p className="local-test-hint" role="note">
+            <strong>{t('admin.localTesting')}</strong>
+            <br />
+            {t('admin.localAdminCredential')}
+          </p>
+        )}
 
         {error && (
           <p className="field-error" role="alert">

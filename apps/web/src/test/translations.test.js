@@ -57,6 +57,7 @@ describe('translation dictionaries', () => {
       'EMPTY_CART',
       'PRODUCT_NOT_FOUND',
       'PRODUCT_UNAVAILABLE',
+      'INSUFFICIENT_STOCK',
       'ADDON_NOT_FOUND',
       'ADDON_INCOMPATIBLE',
       'OPTION_NOT_FOUND',

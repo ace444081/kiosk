@@ -35,6 +35,7 @@ try {
   const addons = rows('addons');
   const products = rows('products');
   const productAddons = rows('product_addons');
+  const productRecommendations = rows('product_recommendations');
   const groups = rows('product_option_groups');
   const options = rows('product_options');
   const admins = rows('admins');
@@ -48,7 +49,8 @@ try {
     if (replaceExisting) {
       await tx.exec(`TRUNCATE TABLE
         audit_events, order_item_options, order_item_addons, order_items, orders,
-        admin_sessions, admins, product_options, product_option_groups, product_addons,
+        admin_sessions, admins, product_options, product_option_groups, product_recommendations,
+        product_addons,
         products, addons, categories, daily_order_sequences CASCADE`);
     }
     for (const row of categories)
@@ -63,7 +65,7 @@ try {
       );
     for (const row of products)
       await tx.query(
-        'INSERT INTO products (id, category_id, sku, name, description_en, description_fil, price_centavos, image_path, is_available, is_published, sort_order, version, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::timestamptz,$14::timestamptz)',
+        'INSERT INTO products (id, category_id, sku, name, description_en, description_fil, price_centavos, image_path, is_available, is_published, stock_quantity, sort_order, version, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::timestamptz,$15::timestamptz)',
         [
           row.id,
           row.category_id,
@@ -75,6 +77,7 @@ try {
           row.image_path,
           Boolean(row.is_available),
           Boolean(row.is_published ?? 1),
+          row.stock_quantity,
           row.sort_order,
           row.version,
           row.created_at,
@@ -86,6 +89,11 @@ try {
         row.product_id,
         row.addon_id,
       ]);
+    for (const row of productRecommendations)
+      await tx.query(
+        'INSERT INTO product_recommendations (product_id, recommended_product_id, sort_order) VALUES ($1,$2,$3)',
+        [row.product_id, row.recommended_product_id, row.sort_order],
+      );
     for (const row of groups)
       await tx.query(
         'INSERT INTO product_option_groups (id, product_id, name_en, name_fil, is_required, min_select, max_select, sort_order) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
@@ -198,6 +206,7 @@ try {
     categories: categories.length,
     addons: addons.length,
     products: products.length,
+    productRecommendations: productRecommendations.length,
     orders: orders.length,
     orderItems: orderItems.length,
     audits: audits.length,
@@ -206,6 +215,9 @@ try {
     categories: (await target.one('SELECT COUNT(*)::int AS n FROM categories')).n,
     addons: (await target.one('SELECT COUNT(*)::int AS n FROM addons')).n,
     products: (await target.one('SELECT COUNT(*)::int AS n FROM products')).n,
+    productRecommendations: (
+      await target.one('SELECT COUNT(*)::int AS n FROM product_recommendations')
+    ).n,
     orders: (await target.one('SELECT COUNT(*)::int AS n FROM orders')).n,
     orderItems: (await target.one('SELECT COUNT(*)::int AS n FROM order_items')).n,
     audits: (await target.one('SELECT COUNT(*)::int AS n FROM audit_events')).n,

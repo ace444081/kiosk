@@ -402,6 +402,41 @@ describe('admin API - auth, CSRF, rate limiting, workflow, summary', () => {
         ]),
       );
     });
+
+    it('updates an existing product picture and tracked inventory with audit history', async () => {
+      const { agent, csrfToken } = await loginAgent(ctx.app, {
+        username: 'boss',
+        password: 'boss-pass-123',
+      });
+      const products = await agent.get('/api/v1/admin/products?search=americano');
+      const americano = products.body.products.find((product) => product.id === 'americano');
+      const updated = await agent
+        .patch('/api/v1/admin/products/americano/catalog')
+        .set('X-CSRF-Token', csrfToken)
+        .send({
+          imagePath: '/placeholders/products/americano.svg',
+          stockQuantity: 0,
+          version: americano.version,
+        });
+      expect(updated.status).toBe(200);
+      expect(updated.body.product.stockQuantity).toBe(0);
+      expect(updated.body.product.isEnabled).toBe(true);
+      expect(updated.body.product.isAvailable).toBe(false);
+
+      const publicMenu = await request(ctx.app).get('/api/v1/menu?locale=en');
+      const publicAmericano = publicMenu.body.categories
+        .flatMap((category) => category.products)
+        .find((product) => product.id === 'americano');
+      expect(publicAmericano.stockQuantity).toBe(0);
+      expect(publicAmericano.isAvailable).toBe(false);
+
+      const audit = await agent.get('/api/v1/admin/audit-events');
+      expect(audit.body.events).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ action: 'PRODUCT_CATALOG_CHANGED', targetId: 'americano' }),
+        ]),
+      );
+    });
   });
 
   describe('daily summary', () => {

@@ -35,12 +35,28 @@ export class CatalogRepository {
     const addons = this.listAddons();
     const productIds = products.map((product) => product.id);
     if (!productIds.length) {
-      return { categories, products, addons, productAddonRows: [], optionGroups: [], options: [] };
+      return {
+        categories,
+        products,
+        addons,
+        productAddonRows: [],
+        recommendationRows: [],
+        optionGroups: [],
+        options: [],
+      };
     }
     const productPlaceholders = productIds.map(() => '?').join(',');
     const productAddonRows = this.db
       .prepare(
         `SELECT product_id, addon_id FROM product_addons WHERE product_id IN (${productPlaceholders})`,
+      )
+      .all(...productIds);
+    const recommendationRows = this.db
+      .prepare(
+        `SELECT product_id, recommended_product_id, sort_order
+         FROM product_recommendations
+         WHERE product_id IN (${productPlaceholders})
+         ORDER BY product_id, sort_order`,
       )
       .all(...productIds);
     const optionGroups = this.db
@@ -51,7 +67,15 @@ export class CatalogRepository {
       .all(...productIds);
     const groupIds = optionGroups.map((group) => group.id);
     const options = this.optionsForGroups(groupIds);
-    return { categories, products, addons, productAddonRows, optionGroups, options };
+    return {
+      categories,
+      products,
+      addons,
+      productAddonRows,
+      recommendationRows,
+      optionGroups,
+      options,
+    };
   }
 
   findAddonsByIds(ids) {
@@ -98,14 +122,60 @@ export class CatalogRepository {
     return this.findProductById(productId);
   }
 
+  updateCatalog(productId, { imagePath, stockQuantity }, expectedVersion) {
+    const result = this.db
+      .prepare(
+        `UPDATE products SET image_path = ?, stock_quantity = ?, version = version + 1,
+           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE id = ? AND version = ?`,
+      )
+      .run(imagePath, stockQuantity, productId, expectedVersion);
+    return result.changes ? this.findProductById(productId) : null;
+  }
+
+  reserveStock(requirements) {
+    for (const { productId, quantity } of requirements) {
+      const product = this.findProductById(productId);
+      if (product?.stock_quantity == null) continue;
+      const result = this.db
+        .prepare(
+          `UPDATE products SET stock_quantity = stock_quantity - ?, version = version + 1,
+             updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+           WHERE id = ? AND stock_quantity >= ?`,
+        )
+        .run(quantity, productId, quantity);
+      if (!result.changes) {
+        return { productId, remaining: this.findProductById(productId)?.stock_quantity ?? 0 };
+      }
+    }
+    return null;
+  }
+
+  releaseStock(items) {
+    const quantities = new Map();
+    for (const item of items) {
+      quantities.set(item.product_id, (quantities.get(item.product_id) || 0) + item.quantity);
+    }
+    const release = this.db.prepare(
+      `UPDATE products SET stock_quantity = stock_quantity + ?, version = version + 1,
+         updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+       WHERE id = ? AND stock_quantity IS NOT NULL`,
+    );
+    for (const [productId, quantity] of [...quantities].sort(([left], [right]) =>
+      left.localeCompare(right),
+    )) {
+      release.run(quantity, productId);
+    }
+  }
+
   createProduct(input) {
     const insert = this.db.transaction((product) => {
       this.db
         .prepare(
           `INSERT INTO products
             (id, category_id, sku, name, description_en, description_fil, price_centavos, image_path,
-             is_available, is_published, sort_order, version)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+            is_available, is_published, stock_quantity, sort_order, version)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
         )
         .run(
           product.sku,
@@ -118,6 +188,7 @@ export class CatalogRepository {
           product.imagePath,
           product.isAvailable ? 1 : 0,
           product.isPublished ? 1 : 0,
+          product.stockQuantity,
           product.sortOrder,
         );
 
@@ -189,9 +260,9 @@ export class CatalogRepository {
       params.push(category);
     }
     if (availability === 'available') {
-      clauses.push('is_available = 1');
+      clauses.push('is_available = 1 AND (stock_quantity IS NULL OR stock_quantity > 0)');
     } else if (availability === 'sold_out') {
-      clauses.push('is_available = 0');
+      clauses.push('(is_available = 0 OR stock_quantity = 0)');
     }
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
     return this.db

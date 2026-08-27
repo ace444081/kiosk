@@ -41,7 +41,7 @@ test.describe('customer kiosk', () => {
     await addSimpleProduct(page, 'Americano', '₱45.00');
     await goToPayment(page);
 
-    await page.getByRole('button', { name: 'Demo E-Wallet' }).click();
+    await page.getByRole('button', { name: 'E-Wallet (Demo)' }).click();
     await expect(page.getByText('DEMO ONLY — NOT A REAL PAYMENT')).toBeVisible();
     await expect(page.locator('.demo-reference')).toContainText('DEMO-');
     await expect(page.getByAltText(/Demo QR/)).toBeVisible();
@@ -107,6 +107,25 @@ test.describe('customer kiosk', () => {
       'Cheese',
     );
     // Fries without a flavor never reaches the server: server-side API test covers rejection.
+  });
+
+  test('review recommends complementary add-ons without returning to the menu', async ({
+    page,
+  }) => {
+    await startOrder(page);
+    await addSimpleProduct(page, 'Hashbrown', '₱65.00');
+    await page
+      .getByRole('button', { name: /Review order/ })
+      .first()
+      .click();
+    await expect(page).toHaveURL(/\/kiosk\/review/);
+    await expect(page.getByRole('heading', { name: 'Recommended add-ons' })).toBeVisible();
+    const latteRecommendation = page.locator('.recommendation-card', { hasText: 'Cafe Latte' });
+    await expect(latteRecommendation).toBeVisible();
+    await latteRecommendation.getByRole('button', { name: 'Choose options' }).click();
+    await expect(page).toHaveURL(/\/kiosk\/customize\/cafe-latte/);
+    await expect(page.getByRole('group', { name: 'Sugar Level' })).toBeVisible();
+    await expect(page.getByRole('radio', { name: '100%' })).toBeChecked();
   });
 
   test('cart edit and remove', async ({ page }) => {

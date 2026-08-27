@@ -6,7 +6,7 @@ import { buildSeedMenu, ADDON_RULES } from '@kiosk/shared';
  * duplicates or overwrites operator changes to availability.
  */
 export function seedCatalog(db) {
-  const { categories, products, addons } = buildSeedMenu();
+  const { categories, products, addons, recommendations } = buildSeedMenu();
 
   const upsertCategory = db.prepare(`
     INSERT INTO categories (id, name_en, name_fil, sort_order)
@@ -45,6 +45,11 @@ export function seedCatalog(db) {
   `);
   const linkAddon = db.prepare(
     'INSERT OR IGNORE INTO product_addons (product_id, addon_id) VALUES (?, ?)',
+  );
+  const linkRecommendation = db.prepare(
+    `INSERT INTO product_recommendations (product_id, recommended_product_id, sort_order)
+     VALUES (?, ?, ?)
+     ON CONFLICT(product_id, recommended_product_id) DO UPDATE SET sort_order = excluded.sort_order`,
   );
   const upsertOptionGroup = db.prepare(`
     INSERT INTO product_option_groups (id, product_id, name_en, name_fil, is_required, min_select, max_select, sort_order)
@@ -118,6 +123,14 @@ export function seedCatalog(db) {
           });
         }
       }
+    }
+
+    for (const recommendation of recommendations) {
+      linkRecommendation.run(
+        recommendation.productId,
+        recommendation.recommendedProductId,
+        recommendation.sortOrder,
+      );
     }
   });
 

@@ -40,6 +40,7 @@ export function PaymentScreen() {
         const specificCode = fieldValues.find((value) =>
           [
             'PRODUCT_UNAVAILABLE',
+            'INSUFFICIENT_STOCK',
             'PRODUCT_NOT_FOUND',
             'REQUIRED_OPTIONS',
             'ADDON_INCOMPATIBLE',

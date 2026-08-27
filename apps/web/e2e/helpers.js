@@ -95,7 +95,7 @@ export async function adminApiContext({ baseURL = 'http://127.0.0.1:4173' } = {}
 export async function adminLogin(page) {
   await page.goto('/admin/login');
   await page.getByLabel(/Username/).fill('e2e-admin');
-  await page.getByLabel(/Password/).fill('e2e-pass-1234');
+  await page.getByRole('textbox', { name: 'Password', exact: true }).fill('e2e-pass-1234');
   await page.getByRole('button', { name: /Sign in|Mag-sign in/ }).click();
   await expect(page).toHaveURL(/\/admin$/);
 }

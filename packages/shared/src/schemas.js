@@ -73,6 +73,21 @@ export const availabilityPatchSchema = z
   })
   .strict();
 
+export const catalogPatchSchema = z
+  .object({
+    imagePath: z
+      .string()
+      .trim()
+      .min(1)
+      .max(500)
+      .refine((value) => value.startsWith('/') || /^https:\/\//i.test(value), {
+        message: 'Use a local /path or HTTPS image URL',
+      }),
+    stockQuantity: z.number().int().min(0).max(1_000_000).nullable(),
+    version: z.number().int().min(1),
+  })
+  .strict();
+
 const productSlugSchema = z
   .string()
   .trim()
@@ -144,6 +159,7 @@ export const createProductSchema = z
     sortOrder: z.number().int().min(0).max(10_000).default(0),
     isPublished: z.boolean().default(false),
     isAvailable: z.boolean().default(false),
+    stockQuantity: z.number().int().min(0).max(1_000_000).nullable().default(null),
     addonIds: z.array(z.string().trim().min(1).max(64)).max(24).default([]),
     optionGroups: z.array(productOptionGroupSchema).max(6).default([]),
   })

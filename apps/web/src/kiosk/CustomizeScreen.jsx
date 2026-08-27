@@ -25,7 +25,7 @@ export function CustomizeScreen() {
     (async () => {
       setLoading(true);
       try {
-        const result = await fetchMenu(locale);
+        const result = await fetchMenu(locale, { force: true });
         if (!cancelled) {
           setMenu(result.menu);
           setError(null);
@@ -50,6 +50,21 @@ export function CustomizeScreen() {
     return null;
   }, [menu, productId]);
 
+  useEffect(() => {
+    if (!product) return;
+    const sugarGroup = (product.optionGroups || []).find((group) =>
+      group.id.endsWith('__sugar-level'),
+    );
+    const standard = sugarGroup?.options.find((option) => option.name === '100%');
+    if (!standard) return;
+    setSelectedOptions((previous) => {
+      const groupOptionIds = new Set(sugarGroup.options.map((option) => option.id));
+      return previous.some((option) => groupOptionIds.has(option.id))
+        ? previous
+        : [...previous, standard];
+    });
+  }, [product]);
+
   const toggleAddon = (addon) => {
     setSelectedAddons((prev) =>
       prev.some((a) => a.id === addon.id)
@@ -58,12 +73,18 @@ export function CustomizeScreen() {
     );
   };
 
-  const toggleOption = (option) => {
-    setSelectedOptions((prev) =>
-      prev.some((o) => o.id === option.id)
-        ? prev.filter((o) => o.id !== option.id)
-        : [...prev, option],
-    );
+  const toggleOption = (option, group) => {
+    setSelectedOptions((prev) => {
+      const alreadySelected = prev.some((o) => o.id === option.id);
+      if (group.maxSelect === 1) {
+        if (alreadySelected) return prev;
+        const groupOptionIds = new Set(group.options.map((candidate) => candidate.id));
+        return [...prev.filter((selected) => !groupOptionIds.has(selected.id)), option];
+      }
+      return alreadySelected
+        ? prev.filter((selected) => selected.id !== option.id)
+        : [...prev, option];
+    });
   };
 
   const validationError = useMemo(() => {
@@ -104,6 +125,7 @@ export function CustomizeScreen() {
       unitPriceCentavos: product.priceCentavos,
       unitTotalCentavos: product.priceCentavos + addonTotal + optionTotal,
       quantity,
+      stockQuantity: product.stockQuantity,
       addons: selectedAddons.map((a) => ({
         id: a.id,
         name: a.name,
@@ -140,6 +162,21 @@ export function CustomizeScreen() {
     );
   }
 
+  if (!product.isAvailable) {
+    return (
+      <main className="customize-screen">
+        <div className="card customize-card empty-state">
+          <h2>{t('menu.productUnavailable')}</h2>
+          <button type="button" className="btn btn-primary" onClick={() => navigate('/kiosk/menu')}>
+            {t('menu.backToMenu')}
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  const quantityMax = Math.min(MAX_QUANTITY, product.stockQuantity ?? MAX_QUANTITY);
+
   return (
     <main className="customize-screen">
       <div className="card customize-card">
@@ -170,7 +207,7 @@ export function CustomizeScreen() {
                       type={group.maxSelect === 1 ? 'radio' : 'checkbox'}
                       name={`group-${group.id}`}
                       checked={selected}
-                      onChange={() => toggleOption(option)}
+                      onChange={() => toggleOption(option, group)}
                     />
                     <span className="option-name">{option.name}</span>
                     {option.priceCentavos > 0 && (
@@ -213,12 +250,16 @@ export function CustomizeScreen() {
             <QuantityStepper
               value={quantity}
               min={1}
-              max={MAX_QUANTITY}
+              max={quantityMax}
               onChange={setQuantity}
               label={t('customize.quantity')}
             />
-            {quantity >= MAX_QUANTITY && (
-              <span className="field-error">{t('customize.invalidQuantity')}</span>
+            {quantity >= quantityMax && (
+              <span className="field-hint">
+                {product.stockQuantity == null
+                  ? t('customize.maximumQuantity')
+                  : t('customize.stockLimit', { count: product.stockQuantity })}
+              </span>
             )}
           </div>
         </section>

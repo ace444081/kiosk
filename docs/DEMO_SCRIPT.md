@@ -55,7 +55,7 @@ Open two browser windows:
 ## Part 5 — Demo e-wallet (simulated) (2 min)
 
 1. Start a new order, add an **Americano**, go to payment.
-2. Choose **Demo E-Wallet**: show the demo QR, the `DEMO-XXXXXXXX`
+2. Choose **E-Wallet (Demo)**: show the demo QR, the `DEMO-XXXXXXXX`
    reference, and read the **DEMO ONLY — NOT A REAL PAYMENT** warning.
 3. Confirm; show the receipt's simulated-payment notice.
 4. State clearly: _"No real money moves in this pilot."_

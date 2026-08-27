@@ -81,6 +81,25 @@ function Harness() {
       <button type="button" onClick={() => clearCart()}>
         clear
       </button>
+      <button
+        type="button"
+        onClick={() =>
+          addItem({
+            key: 'tracked-hashbrown',
+            productId: 'tracked-hashbrown',
+            name: 'Tracked Hashbrown',
+            unitPriceCentavos: 6500,
+            unitTotalCentavos: 6500,
+            quantity: 2,
+            stockQuantity: 3,
+            addons: [],
+            options: [],
+            lineTotalCentavos: 13000,
+          })
+        }
+      >
+        add tracked hashbrown
+      </button>
     </div>
   );
 }
@@ -132,6 +151,14 @@ describe('CartProvider', () => {
       await user.click(screen.getByRole('button', { name: 'add plain americano' }));
     }
     expect(screen.getByTestId('line-Americano')).toHaveTextContent(`x${MAX_QUANTITY} = 90000`);
+  });
+
+  it('caps merged quantities at the tracked stock remaining', async () => {
+    const user = userEvent.setup();
+    renderHarness();
+    await user.click(screen.getByRole('button', { name: 'add tracked hashbrown' }));
+    await user.click(screen.getByRole('button', { name: 'add tracked hashbrown' }));
+    expect(screen.getByTestId('line-Tracked Hashbrown')).toHaveTextContent('x3 = 19500');
   });
 
   it('updates and removes quantities', async () => {

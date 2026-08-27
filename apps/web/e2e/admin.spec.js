@@ -12,12 +12,22 @@ test.describe('admin console', () => {
   test('login rejects bad credentials generically and accepts good ones', async ({ page }) => {
     await page.goto('/admin/login');
     await page.getByLabel(/Username/).fill('e2e-admin');
-    await page.getByLabel(/Password/).fill('wrong-password');
+    await page.getByRole('textbox', { name: 'Password', exact: true }).fill('wrong-password');
+    await page.getByRole('button', { name: 'Show password' }).click();
+    await expect(page.getByRole('textbox', { name: 'Password', exact: true })).toHaveAttribute(
+      'type',
+      'text',
+    );
+    await page.getByRole('button', { name: 'Hide password' }).click();
+    await expect(page.getByRole('textbox', { name: 'Password', exact: true })).toHaveAttribute(
+      'type',
+      'password',
+    );
     await page.getByRole('button', { name: /Sign in/ }).click();
     await expect(page.getByRole('alert')).toContainText(/Invalid username or password/);
     await expect(page).toHaveURL(/\/admin\/login/);
 
-    await page.getByLabel(/Password/).fill('e2e-pass-1234');
+    await page.getByRole('textbox', { name: 'Password', exact: true }).fill('e2e-pass-1234');
     await page.getByRole('button', { name: /Sign in/ }).click();
     await expect(page).toHaveURL(/\/admin$/);
   });
@@ -46,7 +56,7 @@ test.describe('admin console', () => {
       .locator('.stat-value')
       .textContent();
     expect(Number(pendingCash)).toBeGreaterThanOrEqual(1);
-    await expect(page.locator('.orders-table')).toContainText(orderNumber);
+    await expect(page.locator('.orders-table').first()).toContainText(orderNumber);
   });
 
   test('full order progression with cash confirmation', async ({ page }) => {
@@ -73,7 +83,7 @@ test.describe('admin console', () => {
       .getByRole('dialog')
       .getByRole('button', { name: /Confirm cash received/ })
       .click();
-    await expect(page.locator('.badge-cash_received')).toBeVisible();
+    await expect(page.locator('.badge-cash_received', { hasText: 'Cash received' })).toBeVisible();
 
     await page.getByRole('button', { name: /Start preparing/ }).click();
     await page
@@ -221,5 +231,31 @@ test.describe('admin console', () => {
       .getByRole('button', { name: /Mark available/ })
       .click();
     await expect(rowAgain.locator('.badge-completed')).toContainText(/Available/);
+  });
+
+  test('admin can update a product picture path and tracked stock', async ({ page }) => {
+    await adminLogin(page);
+    await page.getByRole('link', { name: /Menu/ }).click();
+    await page.locator('#product-search').fill('hashbrown');
+    const row = page.locator('.product-admin-card', { hasText: '2pc. Hashbrown' }).first();
+    await row.getByRole('button', { name: 'Picture & stock' }).click();
+    const dialog = page.getByRole('dialog', { name: '2pc. Hashbrown' });
+    await dialog.getByLabel('Stock quantity').fill('2');
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(row).toContainText('2 remaining');
+
+    const kiosk = await page.context().newPage();
+    await kiosk.goto('/kiosk');
+    await kiosk.getByRole('button', { name: /Start Order/ }).click();
+    const card = kiosk.locator('.product-card', { hasText: '2pc. Hashbrown' }).first();
+    await expect(card).toContainText('2 left');
+    await kiosk.close();
+
+    // Return the shared e2e catalog to its untracked baseline.
+    await row.getByRole('button', { name: 'Picture & stock' }).click();
+    const restoreDialog = page.getByRole('dialog', { name: '2pc. Hashbrown' });
+    await restoreDialog.getByLabel('Stock quantity').fill('');
+    await restoreDialog.getByRole('button', { name: 'Save' }).click();
+    await expect(row).toContainText('Untracked');
   });
 });

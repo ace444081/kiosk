@@ -1,7 +1,7 @@
 import { ADDON_RULES, buildSeedMenu } from '@kiosk/shared';
 
 export async function seedPostgresCatalog(db) {
-  const { categories, products, addons } = buildSeedMenu();
+  const { categories, products, addons, recommendations } = buildSeedMenu();
   await db.transaction(async (tx) => {
     for (const category of categories) {
       await tx.query(
@@ -94,6 +94,16 @@ export async function seedPostgresCatalog(db) {
           );
         }
       }
+    }
+    for (const recommendation of recommendations) {
+      await tx.query(
+        `INSERT INTO product_recommendations
+          (product_id, recommended_product_id, sort_order)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (product_id, recommended_product_id)
+         DO UPDATE SET sort_order = EXCLUDED.sort_order`,
+        [recommendation.productId, recommendation.recommendedProductId, recommendation.sortOrder],
+      );
     }
   });
   return { categories: categories.length, products: products.length, addons: addons.length };

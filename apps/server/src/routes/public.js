@@ -76,13 +76,27 @@ export function publicRoutes({
             optionGroups: [],
             options: [],
           };
-      const { categories, products, addons, productAddonRows, optionGroups, options } = menuData;
+      const {
+        categories,
+        products,
+        addons,
+        productAddonRows,
+        recommendationRows = [],
+        optionGroups,
+        options,
+      } = menuData;
       const addonById = new Map(addons.map((a) => [a.id, a]));
       const addonIdsByProduct = new Map();
       for (const relation of productAddonRows) {
         const list = addonIdsByProduct.get(relation.product_id) || [];
         list.push(relation.addon_id);
         addonIdsByProduct.set(relation.product_id, list);
+      }
+      const recommendationIdsByProduct = new Map();
+      for (const relation of recommendationRows) {
+        const list = recommendationIdsByProduct.get(relation.product_id) || [];
+        list.push(relation.recommended_product_id);
+        recommendationIdsByProduct.set(relation.product_id, list);
       }
       const optionGroupsByProduct = new Map();
       for (const group of optionGroups) {
@@ -117,8 +131,11 @@ export function publicRoutes({
               description: isFil ? p.description_fil : p.description_en,
               priceCentavos: p.price_centavos,
               imagePath: p.image_path,
-              isAvailable: p.is_available === 1,
+              isAvailable:
+                p.is_available === 1 && (p.stock_quantity == null || p.stock_quantity > 0),
+              stockQuantity: p.stock_quantity,
               version: p.version,
+              recommendationIds: recommendationIdsByProduct.get(p.id) || [],
               addons: (addonIdsByProduct.get(p.id) || [])
                 .map((addonId) => {
                   const addon = addonById.get(addonId);

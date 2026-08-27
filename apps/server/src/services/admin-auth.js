@@ -15,9 +15,10 @@ export function normalizeAccountRole(role) {
  * supervised kiosk server, LAN only).
  */
 export class LoginRateLimiter {
-  constructor({ max = 5, windowMs = 15 * 60 * 1000 } = {}) {
+  constructor({ max = 5, windowMs = 15 * 60 * 1000, disabled = false } = {}) {
     this.max = max;
     this.windowMs = windowMs;
+    this.disabled = disabled;
     this.attempts = new Map();
     this.pruneTimer = setInterval(() => this.prune(), 60_000);
     this.pruneTimer.unref?.();
@@ -35,6 +36,7 @@ export class LoginRateLimiter {
   }
 
   isBlocked(ip, username) {
+    if (this.disabled) return false;
     const entry = this.attempts.get(this.key(ip, username));
     if (!entry) return false;
     if (Date.now() > entry.resetAt) {
@@ -51,6 +53,7 @@ export class LoginRateLimiter {
   }
 
   recordFailure(ip, username) {
+    if (this.disabled) return;
     const key = this.key(ip, username);
     const now = Date.now();
     const entry = this.attempts.get(key);

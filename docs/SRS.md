@@ -19,13 +19,14 @@ client provides production artwork.
 In scope: customer kiosk, persistent menu and orders, product customization,
 shopping cart, cash and simulated e-wallet checkout, order numbers and
 digital receipts, protected staff interface, cash-payment confirmation,
-preparation-status workflow, menu availability controls, daily operational
+preparation-status workflow, menu availability and finished-product inventory
+controls, product-picture maintenance, review-screen recommendations, daily operational
 summary, English/Filipino interface, local-network deployment, local HTTPS,
 PWA behavior, backup/restore scripts, automated tests, school/operator docs.
 
 Out of scope (explicitly NOT implemented): real GCash/Maya/card/bank payment
 integration, real merchant QR codes, real transfer confirmation, VAT,
-senior/PWD discounts, promotions, coupons, inventory/ingredient deduction,
+senior/PWD discounts, promotions, coupons, ingredient/recipe-level deduction,
 customer accounts or personal-data collection, delivery/table service, cloud
 hosting/sync, receipt-printer drivers/cash drawers, multi-branch support,
 public internet exposure, dark mode.
@@ -79,13 +80,15 @@ public internet exposure, dark mode.
   no horizontal page overflow.
 - FR1.4 Product cards show placeholder image, name, description, price,
   availability, and Add/Customize. Sold-out items stay visible but disabled
-  and marked "Sold out"/"Ubos na".
+  and marked "Sold out"/"Ubos na"; tracked stock may show the remaining units.
 - FR1.5 Customization: details, base price, valid add-ons only, required
-  option groups, quantity 1–20, running line total, localized validation,
+  option groups including beverage sugar level, quantity 1–20 (also capped by
+  tracked stock), running line total, localized validation,
   add-to-cart. Identically configured lines merge; differently configured
   lines stay separate.
 - FR1.6 Review: increase/decrease quantity, remove, clear with confirmation,
-  return to menu, review add-ons and choices, line totals and final total;
+  return to menu, review add-ons and choices, add complementary recommendations
+  without returning to the menu, line totals and final total;
   continue only when valid and non-empty. Preview totals are UI-side; the
   API is authoritative.
 - FR1.7 Payment options (exactly two):

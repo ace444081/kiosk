@@ -13,6 +13,7 @@ const initialForm = {
   imagePath: '',
   sortOrder: '0',
   publication: 'draft',
+  stockQuantity: '',
   addonIds: [],
   optionGroups: [],
 };
@@ -96,6 +97,7 @@ export function AdminProductFormDialog({ categories, addons, onClose, onCreated 
         imagePath: form.imagePath.trim(),
         sortOrder: Number.parseInt(form.sortOrder || '0', 10),
         ...productState,
+        stockQuantity: form.stockQuantity === '' ? null : Number.parseInt(form.stockQuantity, 10),
         addonIds: form.addonIds,
         optionGroups: form.optionGroups.map((group) => ({
           key: group.key.trim(),
@@ -196,6 +198,20 @@ export function AdminProductFormDialog({ categories, addons, onClose, onCreated 
                   value={form.sortOrder}
                   onChange={(event) => update('sortOrder', event.target.value)}
                 />
+              </label>
+              <label>
+                {t('admin.stockQuantity')}
+                <input
+                  type="number"
+                  min="0"
+                  max="1000000"
+                  step="1"
+                  inputMode="numeric"
+                  value={form.stockQuantity}
+                  placeholder={t('admin.untrackedInventory')}
+                  onChange={(event) => update('stockQuantity', event.target.value)}
+                />
+                <span className="field-hint">{t('admin.stockQuantityHint')}</span>
               </label>
             </div>
           </fieldset>

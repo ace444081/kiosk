@@ -29,6 +29,7 @@ const envSchema = z.object({
   API_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
   LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
   LOGIN_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(900_000),
+  DISABLE_RATE_LIMITS: z.enum(['true', 'false']).default('false'),
 });
 
 export function resolveDbPath(dbPath) {
@@ -70,6 +71,9 @@ export function loadEnv(overrides = {}) {
   }
 
   if (env.NODE_ENV === 'production') {
+    if (env.DISABLE_RATE_LIMITS === 'true') {
+      throw new Error('DISABLE_RATE_LIMITS=true is only allowed in development or test.');
+    }
     if (env.COOKIE_SECURE !== 'true') {
       throw new Error(
         'Production/pilot mode requires COOKIE_SECURE=true (HTTPS is terminated by Caddy in front of Node).',
@@ -98,5 +102,6 @@ export function loadEnv(overrides = {}) {
     publicOrigins: env.PUBLIC_ORIGINS.split(',')
       .map((origin) => origin.trim())
       .filter(Boolean),
+    disableRateLimits: env.DISABLE_RATE_LIMITS === 'true',
   };
 }

@@ -287,6 +287,33 @@ describe('OrderService - pricing and validation (authoritative server-side)', ()
     expect(a.order.orderNumber).not.toBe(b.order.orderNumber);
   });
 
+  it('restores tracked stock when a placed order is cancelled before preparation', () => {
+    ctx.db.prepare('UPDATE products SET stock_quantity = 4 WHERE id = ?').run('hashbrown-2pc');
+    const created = create({
+      locale: 'en',
+      paymentMethod: 'cash',
+      items: [{ productId: 'hashbrown-2pc', quantity: 3 }],
+    });
+    expect(
+      ctx.db.prepare('SELECT stock_quantity FROM products WHERE id = ?').get('hashbrown-2pc')
+        .stock_quantity,
+    ).toBe(1);
+
+    ctx.service.changeStatus({
+      orderId: created.order.id,
+      newStatus: 'cancelled',
+      version: created.order.version,
+      actor: 'unit-admin',
+      actorRole: 'admin',
+      requestId: 'cancel-test',
+      ip: '127.0.0.1',
+    });
+    expect(
+      ctx.db.prepare('SELECT stock_quantity FROM products WHERE id = ?').get('hashbrown-2pc')
+        .stock_quantity,
+    ).toBe(4);
+  });
+
   it('cash orders start pending_cash; demo orders start demo_confirmed', () => {
     const cash = create({
       locale: 'en',

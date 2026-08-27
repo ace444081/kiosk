@@ -23,11 +23,13 @@ Pilot-specific risks, mitigations, and current status. Severity: L/M/H.
 | R17 | **Physical-device issues (pinning, orientation, printing)** | M          | M      | DEPLOYMENT.md covers Android/iPadOS steps; printing uses the browser print dialog; no printer driver support by design                                                                 | Open — requires on-device UAT (not performed on hardware)            |
 | R18 | **Business date confusion near midnight**                   | L          | L      | All dates derived from Asia/Manila at order time; verified by unit tests                                                                                                               | Mitigated                                                            |
 | R19 | **Rate limiting blocks legitimate staff**                   | L          | M      | 300 req/min per IP; login limiter is per IP+username with reset-on-success; documented                                                                                                 | Mitigated                                                            |
-| R20 | **Scope creep into excluded features**                      | M          | M      | Excluded features explicitly listed in SRS/KNOWN_LIMITATIONS; no inventory, discounts, accounts, delivery, etc.                                                                        | Controlled                                                           |
+| R20 | **Scope creep into excluded features**                      | M          | M      | Excluded features explicitly listed in SRS/KNOWN_LIMITATIONS; no ingredient inventory, discounts, accounts, delivery, etc.                                                             | Controlled                                                           |
+| R21 | **Concurrent orders oversell tracked stock**                | L          | H      | Aggregate product quantities and reserve stock inside the same order transaction; reject insufficient stock; restore only pre-preparation cancellations                                | Mitigated (automated tests)                                          |
 
 ## Residual risks requiring client/school decision
 
 - **R02** add-on matrix confirmation.
+- Product recommendation pairing confirmation.
 - **R17** physical-device behavior (pinning, guided access, print).
 - Replacement of placeholder brand assets with production assets
   (visual only — no logic changes required).

@@ -11,6 +11,7 @@ import {
 import { generateToken, sha256Hex } from '../security/tokens.js';
 import { badRequest, conflict, notFound } from '../utils/app-error.js';
 import { EVENT_TYPES } from '../events/event-types.js';
+import { addStockFieldErrors, aggregateStockRequirements } from './inventory.js';
 
 const DEMO_REFERENCE_LENGTH = 8;
 
@@ -113,6 +114,10 @@ export class OrderService {
         fieldErrors[`items.${index}.productId`] = 'PRODUCT_UNAVAILABLE';
         return null;
       }
+      if (product.stock_quantity != null && product.stock_quantity <= 0) {
+        fieldErrors[`items.${index}.quantity`] = 'INSUFFICIENT_STOCK';
+        return null;
+      }
 
       if (new Set(addonIds).size !== addonIds.length) {
         fieldErrors[`items.${index}.addonIds`] = 'DUPLICATE_ADDON';
@@ -206,6 +211,12 @@ export class OrderService {
 
     if (Object.keys(fieldErrors).length > 0) {
       throw badRequest('VALIDATION_ERROR', 'Order items failed validation', fieldErrors);
+    }
+
+    const stockFailure = this.catalog.reserveStock(aggregateStockRequirements(items));
+    if (stockFailure) {
+      addStockFieldErrors(fieldErrors, input.items, stockFailure.productId);
+      throw badRequest('VALIDATION_ERROR', 'Not enough stock for this order', fieldErrors);
     }
 
     const subtotalCentavos = items.reduce((sum, i) => sum + i.lineTotalCentavos, 0);
@@ -330,13 +341,25 @@ export class OrderService {
     }
 
     const previous = { status: order.status, payment_status: order.payment_status };
-    const updated = this.orders.updateStatus(orderId, newStatus, {
+    const statusUpdate = () =>
+      this.orders.updateStatus(orderId, newStatus, {
       version,
       preparingAt: newStatus === 'preparing' ? new Date().toISOString() : undefined,
       readyAt: newStatus === 'ready' ? new Date().toISOString() : undefined,
       completedAt: newStatus === 'completed' ? new Date().toISOString() : undefined,
       cancelledAt: newStatus === 'cancelled' ? new Date().toISOString() : undefined,
-    });
+      });
+    let updated;
+    if (newStatus === 'cancelled' && order.status === 'placed') {
+      const cancel = this.db.transaction(() => {
+        const next = statusUpdate();
+        this.catalog.releaseStock(this.orders.itemsForOrder(orderId));
+        return next;
+      });
+      updated = cancel.immediate();
+    } else {
+      updated = statusUpdate();
+    }
 
     if (!updated) {
       throw conflict('STALE_VERSION', 'Order was modified by another action', {
@@ -364,6 +387,12 @@ export class OrderService {
       type: EVENT_TYPES.ORDER_UPDATED,
       data: this.serializeOrder(this.orders.detail(orderId)),
     });
+    if (newStatus === 'cancelled' && order.status === 'placed') {
+      this.eventBus.publish({
+        type: EVENT_TYPES.CATALOG_CHANGED,
+        data: { action: 'inventory_restored', orderId },
+      });
+    }
     return this.serializeOrder(this.orders.detail(orderId));
   }
 

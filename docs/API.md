@@ -41,7 +41,9 @@ Cacheable: `Cache-Control: public, max-age=5` (PWA stores the latest copy for of
           "priceCentavos": 6500,
           "imagePath": "/placeholders/products/crinkled-fries.svg",
           "isAvailable": true,
+          "stockQuantity": null,
           "version": 1,
+          "recommendationIds": ["cafe-latte", "honey-calamansi"],
           "addons": [],
           "optionGroups": [
             {
@@ -127,7 +129,8 @@ Responses:
   stored).
 
 Validation failures return `400` with `fieldErrors` keys such as
-`items.0.productId: PRODUCT_UNAVAILABLE`, `items.0.addonIds:
+`items.0.productId: PRODUCT_UNAVAILABLE`, `items.0.quantity:
+INSUFFICIENT_STOCK`, `items.0.addonIds:
 ADDON_INCOMPATIBLE`, `items.0.optionIds: REQUIRED_OPTIONS`.
 
 ### `GET /api/v1/orders/:orderNumber/receipt?token=...`
@@ -238,7 +241,9 @@ Body: `{ "paymentStatus": "cash_received", "version": 1 }` (cash orders only).
 
 Query params: `search`, `category`, `availability` (`available`|`sold_out`|`all`).
 Response: `{ "products": [ { id, sku, name, categoryId, categoryName,
-priceCentavos, imagePath, isAvailable, version, updatedAt } ] }`
+priceCentavos, imagePath, stockQuantity, isEnabled, isAvailable, version,
+updatedAt } ] }`. `isEnabled` is the manual sales switch; `isAvailable` also
+requires positive stock when inventory is tracked.
 
 ### `PATCH /api/v1/admin/products/:id/availability`
 
@@ -247,6 +252,13 @@ Body: `{ "isAvailable": false, "version": 1 }`
 - 200: `{ "product": { id, isAvailable, version, updatedAt } }`
 - 409: `STALE_VERSION` (with the current product)
 - 404: `PRODUCT_NOT_FOUND`
+
+### `PATCH /api/v1/admin/products/:id/catalog`
+
+Updates the customer-facing picture and optional product-level inventory.
+Body: `{ "imagePath": "/images/item.webp", "stockQuantity": 24, "version": 1 }`.
+Use `stockQuantity: null` for untracked inventory and `0` for sold out by stock.
+The update is audited and guarded by optimistic versioning.
 
 ### `GET /api/v1/admin/summary`
 
@@ -327,6 +339,7 @@ The admin UI falls back to 5-second polling when SSE fails.
 ## Error codes
 
 `VALIDATION_ERROR`, `EMPTY_CART`, `PRODUCT_NOT_FOUND`, `PRODUCT_UNAVAILABLE`,
+`INSUFFICIENT_STOCK`,
 `ADDON_NOT_FOUND`, `ADDON_INCOMPATIBLE`, `OPTION_NOT_FOUND`,
 `REQUIRED_OPTIONS`, `OPTION_LIMIT`, `QUANTITY_OUT_OF_RANGE`,
 `IDEMPOTENCY_KEY_MISSING`, `ORDER_NOT_FOUND`, `INVALID_RECEIPT_TOKEN`,

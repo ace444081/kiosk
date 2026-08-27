@@ -77,11 +77,6 @@ function addSummarySheet(workbook, { summary, analytics, generatedBy }) {
       'Completed orders with confirmed cash or demo payment.',
     ],
     [
-      'Average order value',
-      amount(analytics.summary.averageOrderValueCentavos),
-      'Completed sales divided by completed orders.',
-    ],
-    [
       'Fulfillment rate',
       analytics.summary.completionRate,
       'Completed orders divided by completed plus cancelled orders.',
@@ -104,12 +99,9 @@ function addSummarySheet(workbook, { summary, analytics, generatedBy }) {
   ];
   for (const [label, value, definition] of rows) {
     const row = sheet.addRow([null, label, value, definition]);
-    row.getCell(3).numFmt = [
-      'Real cash sales',
-      'Average order value',
-      'Pending cash',
-      'Demo wallet (simulated)',
-    ].includes(label)
+    row.getCell(3).numFmt = ['Real cash sales', 'Pending cash', 'Demo wallet (simulated)'].includes(
+      label,
+    )
       ? pesoFormat
       : label === 'Fulfillment rate'
         ? percentFormat
@@ -355,7 +347,9 @@ function addMenuSheet(workbook, catalog = []) {
     'Product',
     'Category',
     'Published',
-    'Available',
+    'Sales enabled',
+    'Stock quantity',
+    'Customer available',
     'Price',
     'Updated at (UTC)',
   ]);
@@ -366,12 +360,16 @@ function addMenuSheet(workbook, catalog = []) {
       safeText(product.category_id),
       product.is_published ? 'Yes' : 'No',
       product.is_available ? 'Yes' : 'No',
+      product.stock_quantity == null ? 'Untracked' : product.stock_quantity,
+      product.is_available && (product.stock_quantity == null || product.stock_quantity > 0)
+        ? 'Yes'
+        : 'No',
       amount(product.price_centavos),
       safeText(product.updated_at),
     ]);
-    row.getCell(6).numFmt = pesoFormat;
+    row.getCell(8).numFmt = pesoFormat;
   }
-  styleSheet(sheet, [22, 34, 22, 14, 14, 14, 24], 'G');
+  styleSheet(sheet, [22, 34, 22, 14, 16, 16, 18, 14, 24], 'I');
   return sheet;
 }
 

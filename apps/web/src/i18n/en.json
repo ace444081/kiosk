@@ -51,7 +51,8 @@
     "total": "Total",
     "checkout": "Review order",
     "backToMenu": "Back to menu",
-    "productUnavailable": "This item is currently unavailable."
+    "productUnavailable": "This item is currently unavailable.",
+    "stockRemaining": "{{count}} left"
   },
   "customize": {
     "title": "Customize",
@@ -64,7 +65,9 @@
     "addToCart": "Add to cart",
     "invalidQuantity": "Quantity must be between 1 and 20.",
     "selectRequired": "Please make a selection.",
-    "backToMenu": "Back to menu"
+    "backToMenu": "Back to menu",
+    "maximumQuantity": "Maximum quantity reached.",
+    "stockLimit": "Only {{count}} available."
   },
   "cart": {
     "title": "Your Cart",
@@ -93,7 +96,12 @@
     "continueToPayment": "Continue to payment",
     "emptyTitle": "Your cart is empty",
     "emptyBody": "Please add items before continuing.",
-    "invalidCart": "Some items in your cart are no longer available. Please review."
+    "invalidCart": "Some items in your cart are no longer available. Please review.",
+    "recommendedEyebrow": "Complete your order",
+    "recommendedAddons": "Recommended add-ons",
+    "recommendedHint": "Add a side or drink here without going back to the menu.",
+    "addRecommendation": "Add",
+    "customizeAddon": "Choose options"
   },
   "payment": {
     "title": "Payment",
@@ -101,8 +109,8 @@
     "cashTitle": "Pay with Cash",
     "cashDescription": "Pay at the counter after placing your order.",
     "cashInstruction": "Place your order, then pay the total amount at the counter. A staff member will confirm your payment.",
-    "demoWallet": "Demo E-Wallet",
-    "demoWalletTitle": "Demo e-wallet (simulated)",
+    "demoWallet": "E-Wallet (Demo)",
+    "demoWalletTitle": "E-Wallet (Demo)",
     "demoWalletDescription": "Scan the demo QR on the next screen. No real money moves.",
     "demoWarningTitle": "DEMO ONLY — NOT A REAL PAYMENT",
     "demoWarningBody": "This is a simulated e-wallet for the pilot kiosk. No real transfer happens, no money is deducted, and this is not a real merchant QR.",
@@ -170,6 +178,7 @@
     "EMPTY_CART": "Your cart is empty.",
     "PRODUCT_NOT_FOUND": "An item is no longer on the menu.",
     "PRODUCT_UNAVAILABLE": "An item in your cart is sold out.",
+    "INSUFFICIENT_STOCK": "There is not enough stock for the requested quantity. Please reduce it and try again.",
     "ADDON_NOT_FOUND": "A selected add-on is no longer available.",
     "ADDON_INCOMPATIBLE": "A selected add-on cannot be added to this item.",
     "OPTION_NOT_FOUND": "A selected choice is no longer available.",
@@ -217,6 +226,11 @@
     "loginTitle": "Administrator Sign In",
     "username": "Username",
     "password": "Password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "localTesting": "Local testing accounts",
+    "localAdminCredential": "Admin: e2e-admin / e2e-pass-1234",
+    "localStationCredential": "Staff workboard: e2e-staff / e2e-staff-1234",
     "login": "Sign in",
     "loginError": "Invalid username or password.",
     "loginRateLimited": "Too many failed attempts. Try again in {{seconds}}s.",
@@ -389,7 +403,7 @@
     "invalidDateRange": "The end date must not be before the start date.",
     "cashReceived": "Cash received (completed)",
     "pendingCashValue": "Pending cash",
-    "demoWalletSimulated": "Demo wallet (simulated)",
+    "demoWalletSimulated": "E-Wallet (Demo)",
     "soaDemoNotice": "Demo wallet is simulated pilot data. It is listed for reconciliation only and is never included in real cash received.",
     "anonymousOrderNote": "The kiosk does not collect customer names. The SOA identifies orders by order number only.",
     "menuManageIntro": "Create a complete kiosk item, keep it as a draft, or manage what customers can see.",
@@ -439,7 +453,17 @@
     "publishUnavailable": "Publish, but keep unavailable",
     "publishAvailable": "Publish and make available",
     "createProduct": "Create menu item",
-    "productCreateError": "Could not create the menu item. Check all required fields."
+    "productCreateError": "Could not create the menu item. Check all required fields.",
+    "catalogControls": "Picture and inventory",
+    "catalogControlsHint": "Update the customer-facing product picture and the quantity available to order.",
+    "productPicture": "Product picture",
+    "inventory": "Inventory",
+    "stockQuantity": "Stock quantity",
+    "stockQuantityHint": "Leave blank to keep inventory untracked. Set 0 to mark the item sold out by stock.",
+    "untrackedInventory": "Untracked",
+    "stockRemaining": "{{count}} remaining",
+    "manageCatalog": "Picture & stock",
+    "catalogUpdateError": "Could not update the product picture or inventory."
   },
   "print": {
     "demoWatermark": "DEMO — SIMULATED PAYMENT"

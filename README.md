@@ -129,6 +129,23 @@ Open the local machine's LAN address on each device. The API remains behind the
 Vite proxy. Do not expose port 4000 directly and do not enable router port
 forwarding.
 
+### Local testing mode
+
+For local development only, set `DISABLE_RATE_LIMITS=true` in `.env` and
+restart the server. This disables both the API and failed-login limiters so
+credential testing is not locked out; production startup rejects this value.
+
+The disposable browser-test server creates these accounts automatically:
+
+- Admin: `e2e-admin` / `e2e-pass-1234`
+- Staff workboard (payment, preparation, and handoff): `e2e-staff` /
+  `e2e-staff-1234`
+
+Run `npx playwright test` for the isolated fixture, or start
+`node apps/web/e2e/server-for-e2e.js` and point the Vite proxy at port 4100 for
+manual testing. These are test-only credentials and must never be reused in a
+shared or hosted environment.
+
 ## Hosted fallback deployment
 
 ### 1. Supabase

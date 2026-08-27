@@ -488,25 +488,16 @@ export function AdminDashboard() {
           note={`${Math.round((summaryData.completionRate || 0) * 100)}% ${t('admin.fulfillmentRate')}`}
         />
         <MetricCard
-          label={t('admin.averageOrderValue')}
-          value={
-            summaryData.averageOrderValueCentavos == null
-              ? 'N/A'
-              : formatPeso(summaryData.averageOrderValueCentavos)
-          }
-          note={t('admin.confirmedOrdersOnly')}
+          label={t('admin.demoWalletSimulated')}
+          value={formatPeso(summaryData.completedSalesDemoCentavos)}
+          note={t('admin.simulatedNote')}
+          tone="dashboard-metric-demo"
         />
         <MetricCard
           label={t('admin.pendingCash')}
           value={summaryData.pendingCash}
           note={`${formatPeso(summaryData.pendingCashCentavos)} ${t('admin.pendingCashValue')}`}
           tone={summaryData.pendingCash ? 'dashboard-metric-warning' : ''}
-        />
-        <MetricCard
-          label={t('admin.demoWalletSimulated')}
-          value={formatPeso(summaryData.completedSalesDemoCentavos)}
-          note={t('admin.simulatedNote')}
-          tone="dashboard-metric-demo"
         />
       </section>
 

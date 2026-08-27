@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ApiError } from '../services/api.js';
 import { staffLogin } from '../services/admin-api.js';
+import { PasswordField } from '../components/PasswordField.jsx';
 
 const destination = (station) =>
   ['cashier', 'kitchen', 'serving'].includes(station)
@@ -9,6 +11,7 @@ const destination = (station) =>
     : '/staff/operations';
 
 export function StaffLoginScreen() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const station = searchParams.get('station') || 'launcher';
@@ -60,13 +63,22 @@ export function StaffLoginScreen() {
         </label>
         <label>
           Password
-          <input
-            type="password"
-            autoComplete="current-password"
+          <PasswordField
+            id="staff-password"
+            label="Password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
+            showLabel={t('admin.showPassword')}
+            hideLabel={t('admin.hidePassword')}
           />
         </label>
+        {import.meta.env.DEV && (
+          <p className="local-test-hint" role="note">
+            <strong>{t('admin.localTesting')}</strong>
+            <br />
+            {t('admin.localStationCredential')}
+          </p>
+        )}
         {error && (
           <p className="station-error" role="alert">
             {error}

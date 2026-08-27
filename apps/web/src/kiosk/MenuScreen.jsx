@@ -29,7 +29,7 @@ export function MenuScreen() {
     (async () => {
       setLoading(true);
       try {
-        const result = await fetchMenu(locale);
+        const result = await fetchMenu(locale, { force: true });
         if (!cancelled) {
           setMenu(result.menu);
           setStale(result.stale);
@@ -196,6 +196,11 @@ export function MenuScreen() {
               <div className="product-info">
                 <h2 className="product-name">{product.name}</h2>
                 <p className="product-desc">{product.description}</p>
+                {product.stockQuantity != null && product.isAvailable && (
+                  <p className={`stock-note ${product.stockQuantity <= 5 ? 'stock-note-low' : ''}`}>
+                    {t('menu.stockRemaining', { count: product.stockQuantity })}
+                  </p>
+                )}
                 <div className="product-footer">
                   <span className="product-price">{formatPeso(product.priceCentavos)}</span>
                   {product.isAvailable ? (
