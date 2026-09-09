@@ -102,7 +102,7 @@ export class PgAuditRepository {
     const params = [];
     const add = (sql, value) => {
       params.push(value);
-      clauses.push(sql.replace('$value', `$${params.length}`));
+      clauses.push(sql.replaceAll('$value', `$${params.length}`));
     };
     if (action) add('action = $value', action);
     if (from) add('created_at::date >= $value::date', from);
@@ -412,7 +412,7 @@ export class PgCatalogRepository {
     const params = [];
     const add = (sql, value) => {
       params.push(value);
-      clauses.push(sql.replace('$value', `$${params.length}`));
+      clauses.push(sql.replaceAll('$value', `$${params.length}`));
     };
     if (search) {
       add('(name ILIKE $value OR sku ILIKE $value)', `%${search}%`);
@@ -472,7 +472,7 @@ export class PgOrderRepository {
     const params = [];
     const add = (sql, value) => {
       params.push(value);
-      clauses.push(sql.replace('$value', `$${params.length}`));
+      clauses.push(sql.replaceAll('$value', `$${params.length}`));
     };
     if (filters.status) add('status = $value', filters.status);
     if (filters.payment) add('payment_status = $value', filters.payment);
