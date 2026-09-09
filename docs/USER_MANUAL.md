@@ -14,6 +14,8 @@
 - Browse categories (Pasta, Snacks, Bread, Drip Coffee, Espresso,
   Ice-Shaken Drinks, Non-Coffee Drinks) or use the **search** box.
 - Each item shows its picture, name, description, and price.
+- Tracked items also show their remaining stock; a low-stock warning appears
+  when only a few units remain.
 - Tap **Add / Idagdag** (or **Customize / I-customize**) on an item.
 - Items marked **Sold out / Ubos na** cannot be ordered.
 
@@ -35,8 +37,9 @@
 - Adjust quantities, remove items, or clear the cart.
 - Tap **Review order / Suriin ang order**, check everything, then tap
   **Continue to payment / Magpatuloy sa pagbabayad**.
-- The review screen offers complementary drinks or sides. Add a simple item
-  in one tap, or open its choices directly without returning to the menu.
+- The review screen offers complementary food, drinks, or sides. Add a simple
+  item in one tap, or open its sugar level/add-ons directly and return to the
+  review screen without starting over.
 
 ## 5. Pay
 

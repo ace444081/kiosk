@@ -78,9 +78,10 @@ public internet exposure, dark mode.
   flexible product grid; persistent cart panel ≈30% width at ≥1024 px; cart
   drawer below 1024 px; horizontally scrollable categories; visible checkout;
   no horizontal page overflow.
-- FR1.4 Product cards show placeholder image, name, description, price,
-  availability, and Add/Customize. Sold-out items stay visible but disabled
-  and marked "Sold out"/"Ubos na"; tracked stock may show the remaining units.
+- FR1.4 Product cards show an image, name, description, price, availability,
+  and Add/Customize. Sold-out items stay visible but disabled and marked
+  "Sold out"/"Ubos na"; tracked stock shows remaining units and a low-stock
+  warning when only 1–5 remain.
 - FR1.5 Customization: details, base price, valid add-ons only, required
   option groups including beverage sugar level, quantity 1–20 (also capped by
   tracked stock), running line total, localized validation,
@@ -164,9 +165,10 @@ public internet exposure, dark mode.
   stale updates → HTTP 409 with the newest state.
 - FR5.7 Payment workflow: cash `pending_cash→cash_received`; demo remains
   `demo_confirmed`; no refunds.
-- FR5.8 Menu availability: search/filter products, mark available or sold
-  out, see last-update time. No price/name/category/add-on editing in this
-  version.
+- FR5.8 Menu availability and inventory: search/filter products, including
+  low-stock items, mark available or sold out, edit tracked quantity and
+  picture, and see last-update time. No price/name/category/add-on editing in
+  this version.
 
 ### FR6 Persistence, numbering, and audit
 

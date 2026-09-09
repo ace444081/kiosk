@@ -26,6 +26,14 @@ export const BUSINESS_DATE_FORMAT = 'yyyy-MM-dd';
 export const MIN_QUANTITY = 1;
 export const MAX_QUANTITY = 20;
 export const MAX_CART_LINES = 50;
+export const LOW_STOCK_THRESHOLD = 5;
+
+/** Classify optional product-level stock for consistent admin/kiosk labels. */
+export function getStockStatus(stockQuantity, threshold = LOW_STOCK_THRESHOLD) {
+  if (stockQuantity == null) return 'untracked';
+  if (stockQuantity <= 0) return 'sold_out';
+  return stockQuantity <= threshold ? 'low' : 'healthy';
+}
 
 export const LOCALES = ['en', 'fil'];
 export const DEFAULT_LOCALE = 'en';

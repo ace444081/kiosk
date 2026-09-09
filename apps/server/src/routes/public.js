@@ -4,7 +4,7 @@ import { CatalogRepository } from '../repositories/catalog.js';
 import { zodErrorToEnvelope } from '../middleware/errors.js';
 import { badRequest } from '../utils/app-error.js';
 import { DateTime } from 'luxon';
-import { BUSINESS_TIMEZONE } from '@kiosk/shared';
+import { BUSINESS_TIMEZONE, getStockStatus } from '@kiosk/shared';
 import { OrderRepository } from '../repositories/orders.js';
 
 const IDEMPOTENCY_KEY_RE = /^[A-Za-z0-9_-]{8,128}$/;
@@ -134,6 +134,7 @@ export function publicRoutes({
               isAvailable:
                 p.is_available === 1 && (p.stock_quantity == null || p.stock_quantity > 0),
               stockQuantity: p.stock_quantity,
+              stockStatus: getStockStatus(p.stock_quantity),
               version: p.version,
               recommendationIds: recommendationIdsByProduct.get(p.id) || [],
               addons: (addonIdsByProduct.get(p.id) || [])

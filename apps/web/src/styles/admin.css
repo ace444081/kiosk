@@ -1412,6 +1412,35 @@
   margin: var(--space-3) 0;
 }
 
+.inventory-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: 800;
+}
+
+.inventory-status-untracked {
+  color: var(--color-text-muted);
+  background: #edf2f7;
+}
+
+.inventory-status-healthy {
+  color: #17643d;
+  background: #e7f5eb;
+}
+
+.inventory-status-low {
+  color: #8a5b00;
+  background: #fff3cf;
+}
+
+.inventory-status-sold_out {
+  color: #a52e25;
+  background: #ffe8e4;
+}
+
 .product-admin-actions {
   display: flex;
   flex-direction: column;

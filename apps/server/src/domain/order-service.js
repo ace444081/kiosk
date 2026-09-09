@@ -343,11 +343,11 @@ export class OrderService {
     const previous = { status: order.status, payment_status: order.payment_status };
     const statusUpdate = () =>
       this.orders.updateStatus(orderId, newStatus, {
-      version,
-      preparingAt: newStatus === 'preparing' ? new Date().toISOString() : undefined,
-      readyAt: newStatus === 'ready' ? new Date().toISOString() : undefined,
-      completedAt: newStatus === 'completed' ? new Date().toISOString() : undefined,
-      cancelledAt: newStatus === 'cancelled' ? new Date().toISOString() : undefined,
+        version,
+        preparingAt: newStatus === 'preparing' ? new Date().toISOString() : undefined,
+        readyAt: newStatus === 'ready' ? new Date().toISOString() : undefined,
+        completedAt: newStatus === 'completed' ? new Date().toISOString() : undefined,
+        cancelledAt: newStatus === 'cancelled' ? new Date().toISOString() : undefined,
       });
     let updated;
     if (newStatus === 'cancelled' && order.status === 'placed') {

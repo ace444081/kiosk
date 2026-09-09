@@ -42,6 +42,7 @@ Cacheable: `Cache-Control: public, max-age=5` (PWA stores the latest copy for of
           "imagePath": "/placeholders/products/crinkled-fries.svg",
           "isAvailable": true,
           "stockQuantity": null,
+          "stockStatus": "untracked",
           "version": 1,
           "recommendationIds": ["cafe-latte", "honey-calamansi"],
           "addons": [],
@@ -239,11 +240,13 @@ Body: `{ "paymentStatus": "cash_received", "version": 1 }` (cash orders only).
 
 ### `GET /api/v1/admin/products`
 
-Query params: `search`, `category`, `availability` (`available`|`sold_out`|`all`).
+Query params: `search`, `category`, `availability`
+(`available`|`low_stock`|`sold_out`|`all`).
 Response: `{ "products": [ { id, sku, name, categoryId, categoryName,
-priceCentavos, imagePath, stockQuantity, isEnabled, isAvailable, version,
-updatedAt } ] }`. `isEnabled` is the manual sales switch; `isAvailable` also
-requires positive stock when inventory is tracked.
+priceCentavos, imagePath, stockQuantity, stockStatus, isEnabled, isAvailable,
+version, updatedAt } ] }`. `stockStatus` is `untracked`, `healthy`, `low`, or
+`sold_out`; `isEnabled` is the manual sales switch; `isAvailable` also requires
+positive stock when inventory is tracked.
 
 ### `PATCH /api/v1/admin/products/:id/availability`
 
@@ -308,7 +311,8 @@ Returns the categories and add-ons used by the admin product-creation form.
 
 Creates a product, its add-on compatibility links, and its option groups in one
 transaction. The product may start as a draft, published-unavailable item, or
-published-available item, subject to the shared product schema.
+published-available item, subject to the shared product schema. Beverage
+products receive the standard Sugar Level option group when it is omitted.
 
 ### `PATCH /api/v1/admin/products/:id/publication`
 
@@ -327,7 +331,9 @@ and pending cash kept separate.
 ### `GET /api/v1/admin/reports/soa.xlsx?from=YYYY-MM-DD&to=YYYY-MM-DD`
 
 Downloads the operations workbook for the selected period and records an
-`SOA_EXPORTED` audit event.
+`SOA_EXPORTED` audit event. The workbook includes a Cashier Statistics sheet
+with cash confirmations, collected cash, completed cash, averages, and the
+latest confirmation time for each staff account.
 
 ### `GET /api/v1/admin/events`
 

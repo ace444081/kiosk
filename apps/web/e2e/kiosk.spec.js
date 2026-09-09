@@ -119,13 +119,18 @@ test.describe('customer kiosk', () => {
       .first()
       .click();
     await expect(page).toHaveURL(/\/kiosk\/review/);
-    await expect(page.getByRole('heading', { name: 'Recommended add-ons' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Recommended food & drinks' })).toBeVisible();
     const latteRecommendation = page.locator('.recommendation-card', { hasText: 'Cafe Latte' });
     await expect(latteRecommendation).toBeVisible();
     await latteRecommendation.getByRole('button', { name: 'Choose options' }).click();
-    await expect(page).toHaveURL(/\/kiosk\/customize\/cafe-latte/);
+    await expect(page).toHaveURL(/\/kiosk\/customize\/cafe-latte\?returnTo=review/);
     await expect(page.getByRole('group', { name: 'Sugar Level' })).toBeVisible();
     await expect(page.getByRole('radio', { name: '100%' })).toBeChecked();
+    await page.getByRole('radio', { name: '50%' }).click();
+    await expect(page.getByRole('radio', { name: '50%' })).toBeChecked();
+    await page.getByRole('button', { name: /Add to cart/ }).click();
+    await expect(page).toHaveURL(/\/kiosk\/review/);
+    await expect(page.locator('.review-line', { hasText: 'Cafe Latte' })).toContainText('50%');
   });
 
   test('cart edit and remove', async ({ page }) => {

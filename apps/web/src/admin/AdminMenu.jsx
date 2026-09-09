@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { formatPeso } from '@kiosk/shared';
+import { ADMIN_POLL_MS, formatPeso } from '@kiosk/shared';
 import { api } from '../services/api.js';
 import { adminPatch } from '../services/admin-api.js';
 import { ConfirmDialog, ProductImage } from '../components/KioskBits.jsx';
@@ -52,6 +52,34 @@ export function AdminMenu() {
     const timer = setTimeout(load, search ? 300 : 0);
     return () => clearTimeout(timer);
   }, [load, search]);
+
+  useEffect(() => {
+    let pollTimer = null;
+    let source = null;
+    const refreshOnEvent = () => load();
+    const startPolling = () => {
+      if (!pollTimer) pollTimer = setInterval(refreshOnEvent, ADMIN_POLL_MS);
+    };
+    try {
+      source = new EventSource('/api/v1/admin/events');
+      source.onopen = () => {
+        if (pollTimer) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+      };
+      ['OrderCreated', 'OrderUpdated', 'AvailabilityChanged', 'CatalogChanged'].forEach((event) =>
+        source.addEventListener(event, refreshOnEvent),
+      );
+      source.onerror = startPolling;
+    } catch {
+      startPolling();
+    }
+    return () => {
+      source?.close();
+      if (pollTimer) clearInterval(pollTimer);
+    };
+  }, [load]);
 
   useEffect(() => {
     api
@@ -120,6 +148,8 @@ export function AdminMenu() {
       total: products.length,
       available: products.filter((product) => product.isPublished && product.isAvailable).length,
       soldOut: products.filter((product) => product.isPublished && !product.isAvailable).length,
+      lowStock: products.filter((product) => product.isPublished && product.stockStatus === 'low')
+        .length,
       drafts: products.filter((product) => !product.isPublished).length,
     };
   }, [products]);
@@ -172,6 +202,7 @@ export function AdminMenu() {
         >
           <option value="all">{t('admin.allAvailability')}</option>
           <option value="available">{t('admin.available')}</option>
+          <option value="low_stock">{t('admin.lowStock')}</option>
           <option value="sold_out">{t('admin.soldOut')}</option>
         </select>
       </div>
@@ -179,7 +210,8 @@ export function AdminMenu() {
       {counts && (
         <p className="menu-counts">
           {counts.total} {t('common.items')} · {counts.available} {t('admin.available')} ·{' '}
-          {counts.soldOut} {t('admin.soldOut')} · {counts.drafts} {t('admin.drafts')}
+          {counts.lowStock} {t('admin.lowStock')} · {counts.soldOut} {t('admin.soldOut')} ·{' '}
+          {counts.drafts} {t('admin.drafts')}
         </p>
       )}
 
@@ -201,16 +233,24 @@ export function AdminMenu() {
         <div className="product-admin-list">
           {products.map((product) => (
             <article className="product-admin-card" key={product.id}>
-              <ProductImage src={product.imagePath} alt="" width="76" height="64" />
+              <ProductImage src={product.imagePath} alt={product.name} width="76" height="64" />
               <div className="product-admin-info">
                 <div className="product-admin-name">{product.name}</div>
                 <div className="product-admin-meta">
                   {product.categoryName} · {formatPeso(product.priceCentavos)}
                   <br />
                   {t('admin.inventory')}:{' '}
-                  {product.stockQuantity == null
-                    ? t('admin.untrackedInventory')
-                    : t('admin.stockRemaining', { count: product.stockQuantity })}
+                  <span className={`inventory-status inventory-status-${product.stockStatus}`}>
+                    {product.stockStatus === 'untracked'
+                      ? t('admin.untrackedInventory')
+                      : product.stockStatus === 'low'
+                        ? t('admin.lowStock')
+                        : product.stockStatus === 'sold_out'
+                          ? t('admin.soldOut')
+                          : t('admin.stockHealthy')}
+                  </span>{' '}
+                  {product.stockQuantity != null &&
+                    t('admin.stockRemaining', { count: product.stockQuantity })}
                   <br />
                   {t('admin.lastUpdated')}: {formatUpdatedAt(product.updatedAt, locale)}
                 </div>

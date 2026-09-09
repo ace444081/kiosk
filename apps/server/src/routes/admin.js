@@ -11,6 +11,9 @@ import {
   publicationPatchSchema,
   reportQuerySchema,
   statusPatchSchema,
+  BEVERAGE_CATEGORIES,
+  SUGAR_LEVEL_GROUP,
+  getStockStatus,
 } from '@kiosk/shared';
 import { zodErrorToEnvelope } from '../middleware/errors.js';
 import { badRequest, conflict, notFound } from '../utils/app-error.js';
@@ -55,6 +58,7 @@ function serializeProduct(product, categoryById) {
     isEnabled,
     isPublished: product.is_published === 1,
     stockQuantity: product.stock_quantity,
+    stockStatus: getStockStatus(product.stock_quantity),
     version: product.version,
     updatedAt: product.updated_at,
   };
@@ -68,6 +72,22 @@ function parseJson(value) {
   } catch {
     return null;
   }
+}
+
+function defaultSugarOptionGroup() {
+  return {
+    key: SUGAR_LEVEL_GROUP.sku,
+    nameEn: SUGAR_LEVEL_GROUP.nameEn,
+    nameFil: SUGAR_LEVEL_GROUP.nameFil,
+    isRequired: SUGAR_LEVEL_GROUP.isRequired,
+    minSelect: SUGAR_LEVEL_GROUP.minSelect,
+    maxSelect: SUGAR_LEVEL_GROUP.maxSelect,
+    options: SUGAR_LEVEL_GROUP.options.map((option) => ({
+      nameEn: option.nameEn,
+      nameFil: option.nameFil,
+      priceCentavos: option.priceCentavos,
+    })),
+  };
 }
 
 export function adminRoutes({
@@ -411,14 +431,23 @@ export function adminRoutes({
       if (await catalog.findProductById(input.sku)) {
         throw conflict('PRODUCT_EXISTS', 'A product with this SKU already exists');
       }
-      if (!(await catalog.listCategories()).some((category) => category.id === input.categoryId)) {
+      const categories = await catalog.listCategories();
+      const category = categories.find((candidate) => candidate.id === input.categoryId);
+      if (!category) {
         throw badRequest('CATEGORY_NOT_FOUND', 'Choose an existing category');
       }
       const addonIds = new Set((await catalog.listAddons()).map((addon) => addon.id));
       const unknownAddon = input.addonIds.find((addonId) => !addonIds.has(addonId));
       if (unknownAddon) throw badRequest('ADDON_NOT_FOUND', 'Choose existing add-ons only');
 
-      const product = await catalog.createProduct(input);
+      const optionGroups = [...input.optionGroups];
+      if (
+        BEVERAGE_CATEGORIES.has(category.id) &&
+        !optionGroups.some((group) => group.key === SUGAR_LEVEL_GROUP.sku)
+      ) {
+        optionGroups.push(defaultSugarOptionGroup());
+      }
+      const product = await catalog.createProduct({ ...input, optionGroups });
       const categoryById = new Map(
         (await catalog.listCategories()).map((category) => [category.id, category]),
       );

@@ -1,4 +1,5 @@
 import { randomId } from '../security/tokens.js';
+import { LOW_STOCK_THRESHOLD } from '@kiosk/shared';
 
 const bool = (value) => (value ? 1 : 0);
 
@@ -419,6 +420,8 @@ export class PgCatalogRepository {
     if (category && category !== 'all') add('category_id = $value', category);
     if (availability === 'available')
       clauses.push('is_available = TRUE AND (stock_quantity IS NULL OR stock_quantity > 0)');
+    if (availability === 'low_stock')
+      clauses.push(`stock_quantity > 0 AND stock_quantity <= ${LOW_STOCK_THRESHOLD}`);
     if (availability === 'sold_out') clauses.push('(is_available = FALSE OR stock_quantity = 0)');
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
     const rows = await this.db.many(

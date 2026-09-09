@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { formatPeso, MAX_QUANTITY } from '@kiosk/shared';
 import { fetchMenu } from '../services/menu-service.js';
@@ -9,9 +9,11 @@ import { ProductImage, QuantityStepper, Price } from '../components/KioskBits.js
 export function CustomizeScreen() {
   const { t, i18n } = useTranslation();
   const { productId } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { addItem } = useCart();
   const locale = i18n.language === 'fil' ? 'fil' : 'en';
+  const returnPath = searchParams.get('returnTo') === 'review' ? '/kiosk/review' : '/kiosk/menu';
 
   const [menu, setMenu] = useState(null);
   const [quantity, setQuantity] = useState(1);
@@ -53,7 +55,7 @@ export function CustomizeScreen() {
   useEffect(() => {
     if (!product) return;
     const sugarGroup = (product.optionGroups || []).find((group) =>
-      group.id.endsWith('__sugar-level'),
+      /(?:__|--)sugar-level$/.test(group.id),
     );
     const standard = sugarGroup?.options.find((option) => option.name === '100%');
     if (!standard) return;
@@ -138,7 +140,7 @@ export function CustomizeScreen() {
       })),
       lineTotalCentavos: lineTotal,
     });
-    navigate('/kiosk/menu');
+    navigate(returnPath);
   };
 
   if (loading) {
@@ -180,8 +182,9 @@ export function CustomizeScreen() {
   return (
     <main className="customize-screen">
       <div className="card customize-card">
-        <button type="button" className="kiosk-back" onClick={() => navigate('/kiosk/menu')}>
-          ← {t('customize.backToMenu')}
+        <button type="button" className="kiosk-back" onClick={() => navigate(returnPath)}>
+          ←{' '}
+          {returnPath === '/kiosk/review' ? t('customize.backToReview') : t('customize.backToMenu')}
         </button>
         <ProductImage src={product.imagePath} alt={product.name} width="600" height="400" />
         <h1>{product.name}</h1>

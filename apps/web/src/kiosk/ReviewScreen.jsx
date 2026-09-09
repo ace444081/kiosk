@@ -52,7 +52,7 @@ export function ReviewScreen() {
 
   const addRecommendation = (product) => {
     if (product.optionGroups?.length) {
-      navigate(`/kiosk/customize/${product.id}`);
+      navigate(`/kiosk/customize/${product.id}?returnTo=review`);
       return;
     }
     addItem({

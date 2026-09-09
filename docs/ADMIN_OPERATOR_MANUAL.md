@@ -92,8 +92,13 @@ Open an order to see all items, add-ons, choices, and totals.
 - Use **Picture & stock** to change the product image path/HTTPS URL or enter
   the remaining finished-product quantity. Leave stock blank for untracked
   inventory; `0` makes the item unavailable by stock.
+- The Menu filter includes **Low stock**. Tracked products are labelled
+  **Healthy**, **Low stock** (1–5 remaining), or **Sold out**; untracked items
+  are labelled **Untracked**.
 - Accepted orders deduct stock atomically. Cancelling while still **Placed**
   restores it; cancellation after preparation has begun does not.
+- New beverage products automatically receive the standard 0%–100% Sugar
+  Level choices.
 
 ## 7. Operations workbook
 
@@ -104,6 +109,7 @@ The dashboard export is a formatted workbook with these sheets:
 - Orders and Order Items, including captured customizations
 - Product Performance
 - Service Times
+- Cashier Statistics
 - Menu Status
 - Audit Log
 - Data Dictionary

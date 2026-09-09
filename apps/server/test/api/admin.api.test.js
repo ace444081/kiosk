@@ -437,6 +437,75 @@ describe('admin API - auth, CSRF, rate limiting, workflow, summary', () => {
         ]),
       );
     });
+
+    it('classifies low stock consistently and supports the low-stock filter', async () => {
+      const { agent, csrfToken } = await loginAgent(ctx.app, {
+        username: 'boss',
+        password: 'boss-pass-123',
+      });
+      const products = await agent.get('/api/v1/admin/products?search=americano');
+      const americano = products.body.products.find((product) => product.id === 'americano');
+      const updated = await agent
+        .patch('/api/v1/admin/products/americano/catalog')
+        .set('X-CSRF-Token', csrfToken)
+        .send({
+          imagePath: americano.imagePath,
+          stockQuantity: 3,
+          version: americano.version,
+        });
+      expect(updated.status).toBe(200);
+      expect(updated.body.product.stockStatus).toBe('low');
+
+      const publicMenu = await request(ctx.app).get('/api/v1/menu?locale=en');
+      const publicAmericano = publicMenu.body.categories
+        .flatMap((category) => category.products)
+        .find((product) => product.id === 'americano');
+      expect(publicAmericano.stockStatus).toBe('low');
+
+      const lowStock = await agent.get('/api/v1/admin/products?availability=low_stock');
+      expect(lowStock.status).toBe(200);
+      expect(lowStock.body.products).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: 'americano', stockStatus: 'low' })]),
+      );
+    });
+
+    it('adds the standard sugar level to a newly created beverage', async () => {
+      const { agent, csrfToken } = await loginAgent(ctx.app, {
+        username: 'boss',
+        password: 'boss-pass-123',
+      });
+      const create = await agent
+        .post('/api/v1/admin/products')
+        .set('X-CSRF-Token', csrfToken)
+        .send({
+          sku: 'test-new-latte',
+          categoryId: 'drip-coffee',
+          name: 'Test New Latte',
+          descriptionEn: 'A testing latte drink.',
+          descriptionFil: 'Isang testing na latte drink.',
+          priceCentavos: 5500,
+          imagePath: '/placeholders/products/cafe-latte.svg',
+          sortOrder: 99,
+          isPublished: true,
+          isAvailable: true,
+          addonIds: [],
+          optionGroups: [],
+        });
+      expect(create.status).toBe(201);
+
+      const menu = await request(ctx.app).get('/api/v1/menu?locale=en');
+      const product = menu.body.categories
+        .flatMap((category) => category.products)
+        .find((candidate) => candidate.id === 'test-new-latte');
+      expect(product.optionGroups).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: 'Sugar Level',
+            options: expect.arrayContaining([expect.objectContaining({ name: '100%' })]),
+          }),
+        ]),
+      );
+    });
   });
 
   describe('daily summary', () => {

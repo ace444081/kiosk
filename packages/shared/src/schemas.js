@@ -219,7 +219,7 @@ export const listOrdersQuerySchema = z.object({
 export const listProductsQuerySchema = z.object({
   search: z.string().max(64).optional(),
   category: z.string().max(64).optional(),
-  availability: z.enum(['available', 'sold_out', 'all']).optional(),
+  availability: z.enum(['available', 'low_stock', 'sold_out', 'all']).optional(),
 });
 
 export const auditLogQuerySchema = z.object({

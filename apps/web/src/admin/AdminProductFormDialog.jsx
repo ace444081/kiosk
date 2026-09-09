@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { formatPeso } from '@kiosk/shared';
+import { BEVERAGE_CATEGORIES, formatPeso, SUGAR_LEVEL_GROUP } from '@kiosk/shared';
 import { adminPost } from '../services/admin-api.js';
 
 const initialForm = {
@@ -30,6 +30,22 @@ function newOptionGroup(index) {
   };
 }
 
+function sugarOptionGroup() {
+  return {
+    key: SUGAR_LEVEL_GROUP.sku,
+    nameEn: SUGAR_LEVEL_GROUP.nameEn,
+    nameFil: SUGAR_LEVEL_GROUP.nameFil,
+    isRequired: SUGAR_LEVEL_GROUP.isRequired,
+    minSelect: SUGAR_LEVEL_GROUP.minSelect,
+    maxSelect: SUGAR_LEVEL_GROUP.maxSelect,
+    options: SUGAR_LEVEL_GROUP.options.map((option) => ({
+      nameEn: option.nameEn,
+      nameFil: option.nameFil,
+      price: String(option.priceCentavos / 100),
+    })),
+  };
+}
+
 function centsFromPeso(value) {
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? Math.round(parsed * 100) : NaN;
@@ -49,6 +65,17 @@ export function AdminProductFormDialog({ categories, addons, onClose, onCreated 
   }, [form.publication]);
 
   const update = (key, value) => setForm((previous) => ({ ...previous, [key]: value }));
+  const updateCategory = (categoryId) => {
+    setForm((previous) => ({
+      ...previous,
+      categoryId,
+      optionGroups:
+        BEVERAGE_CATEGORIES.has(categoryId) &&
+        !previous.optionGroups.some((group) => group.key === SUGAR_LEVEL_GROUP.sku)
+          ? [...previous.optionGroups, sugarOptionGroup()]
+          : previous.optionGroups,
+    }));
+  };
   const updateGroup = (groupIndex, key, value) => {
     setForm((previous) => ({
       ...previous,
@@ -167,7 +194,7 @@ export function AdminProductFormDialog({ categories, addons, onClose, onCreated 
                 <select
                   required
                   value={form.categoryId}
-                  onChange={(event) => update('categoryId', event.target.value)}
+                  onChange={(event) => updateCategory(event.target.value)}
                 >
                   <option value="">{t('admin.selectCategory')}</option>
                   {categories.map((category) => (
@@ -176,6 +203,9 @@ export function AdminProductFormDialog({ categories, addons, onClose, onCreated 
                     </option>
                   ))}
                 </select>
+                {BEVERAGE_CATEGORIES.has(form.categoryId) && (
+                  <span className="field-hint">{t('admin.sugarLevelAuto')}</span>
+                )}
               </label>
               <label>
                 {t('admin.pricePeso')}

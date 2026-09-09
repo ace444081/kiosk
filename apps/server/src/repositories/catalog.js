@@ -1,3 +1,5 @@
+import { LOW_STOCK_THRESHOLD } from '@kiosk/shared';
+
 export class CatalogRepository {
   constructor(db) {
     this.db = db;
@@ -261,6 +263,8 @@ export class CatalogRepository {
     }
     if (availability === 'available') {
       clauses.push('is_available = 1 AND (stock_quantity IS NULL OR stock_quantity > 0)');
+    } else if (availability === 'low_stock') {
+      clauses.push(`stock_quantity > 0 AND stock_quantity <= ${LOW_STOCK_THRESHOLD}`);
     } else if (availability === 'sold_out') {
       clauses.push('(is_available = 0 OR stock_quantity = 0)');
     }

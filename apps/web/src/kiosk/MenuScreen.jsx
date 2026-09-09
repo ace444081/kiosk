@@ -197,7 +197,9 @@ export function MenuScreen() {
                 <h2 className="product-name">{product.name}</h2>
                 <p className="product-desc">{product.description}</p>
                 {product.stockQuantity != null && product.isAvailable && (
-                  <p className={`stock-note ${product.stockQuantity <= 5 ? 'stock-note-low' : ''}`}>
+                  <p
+                    className={`stock-note ${product.stockStatus === 'low' ? 'stock-note-low' : ''}`}
+                  >
                     {t('menu.stockRemaining', { count: product.stockQuantity })}
                   </p>
                 )}

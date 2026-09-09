@@ -66,6 +66,7 @@
     "invalidQuantity": "Quantity must be between 1 and 20.",
     "selectRequired": "Please make a selection.",
     "backToMenu": "Back to menu",
+    "backToReview": "Back to review",
     "maximumQuantity": "Maximum quantity reached.",
     "stockLimit": "Only {{count}} available."
   },
@@ -98,7 +99,7 @@
     "emptyBody": "Please add items before continuing.",
     "invalidCart": "Some items in your cart are no longer available. Please review.",
     "recommendedEyebrow": "Complete your order",
-    "recommendedAddons": "Recommended add-ons",
+    "recommendedAddons": "Recommended food & drinks",
     "recommendedHint": "Add a side or drink here without going back to the menu.",
     "addRecommendation": "Add",
     "customizeAddon": "Choose options"
@@ -468,6 +469,9 @@
     "stockQuantity": "Stock quantity",
     "stockQuantityHint": "Leave blank to keep inventory untracked. Set 0 to mark the item sold out by stock.",
     "untrackedInventory": "Untracked",
+    "stockHealthy": "Healthy",
+    "lowStock": "Low stock",
+    "sugarLevelAuto": "Beverages automatically include a 0%–100% Sugar Level choice.",
     "stockRemaining": "{{count}} remaining",
     "manageCatalog": "Picture & stock",
     "catalogUpdateError": "Could not update the product picture or inventory."

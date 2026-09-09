@@ -66,6 +66,7 @@
     "invalidQuantity": "Ang bilang ay dapat 1 hanggang 20.",
     "selectRequired": "Mangyaring pumili.",
     "backToMenu": "Bumalik sa menu",
+    "backToReview": "Bumalik sa review",
     "maximumQuantity": "Naabot na ang pinakamataas na bilang.",
     "stockLimit": "{{count}} na lang ang available."
   },
@@ -98,7 +99,7 @@
     "emptyBody": "Mangyaring magdagdag ng mga item bago magpatuloy.",
     "invalidCart": "Ang ilang item sa iyong cart ay hindi na available. Pakisuri.",
     "recommendedEyebrow": "Kumpletuhin ang order",
-    "recommendedAddons": "Inirerekomendang add-on",
+    "recommendedAddons": "Inirerekomendang pagkain at inumin",
     "recommendedHint": "Magdagdag ng side o inumin dito nang hindi bumabalik sa menu.",
     "addRecommendation": "Idagdag",
     "customizeAddon": "Pumili ng options"
@@ -468,6 +469,9 @@
     "stockQuantity": "Bilang ng stock",
     "stockQuantityHint": "Iwanang blangko kung hindi ita-track. Ilagay ang 0 para markahang ubos ayon sa stock.",
     "untrackedInventory": "Hindi tina-track",
+    "stockHealthy": "Sapat ang stock",
+    "lowStock": "Kaunti na ang stock",
+    "sugarLevelAuto": "Awtomatikong may 0%–100% na Antas ng Asukal ang mga inumin.",
     "stockRemaining": "{{count}} ang natitira",
     "manageCatalog": "Larawan at stock",
     "catalogUpdateError": "Hindi ma-update ang larawan o inventory ng produkto."
