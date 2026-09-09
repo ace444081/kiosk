@@ -39,6 +39,7 @@ describe('public API - menu, orders, receipts, health', () => {
       expect(fries.description).toContain('fries');
       const dripCoffee = res.body.categories.find((c) => c.id === 'drip-coffee');
       const latte = dripCoffee.products.find((p) => p.id === 'cafe-latte');
+      expect(latte.imagePath).toBe('/images/products/cafe-latte.webp');
       expect(latte.stockStatus).toBe('untracked');
       const sugar = latte.optionGroups.find((group) => group.name === 'Sugar Level');
       expect(sugar.options.map((option) => option.name)).toEqual([

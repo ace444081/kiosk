@@ -192,7 +192,13 @@ export function MenuScreen() {
               className={`card product-card ${product.isAvailable ? '' : 'sold-out'}`}
               key={product.id}
             >
-              <ProductImage src={product.imagePath} alt={product.name} width="600" height="400" />
+              <ProductImage
+                src={product.imagePath}
+                sku={product.sku}
+                alt={product.name}
+                width="600"
+                height="400"
+              />
               <div className="product-info">
                 <h2 className="product-name">{product.name}</h2>
                 <p className="product-desc">{product.description}</p>

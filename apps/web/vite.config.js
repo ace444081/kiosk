@@ -37,7 +37,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,webp,ico,woff2}'],
         navigateFallback: '/kiosk',
         navigateFallbackDenylist: [/^\/api/, /^\/admin/],
         runtimeCaching: [
@@ -53,12 +53,13 @@ export default defineConfig({
             },
           },
           {
-            // Placeholder artwork.
-            urlPattern: ({ url }) => url.pathname.startsWith('/placeholders/'),
+            // Product and placeholder artwork.
+            urlPattern: ({ url }) =>
+              url.pathname.startsWith('/placeholders/') || url.pathname.startsWith('/images/'),
             handler: 'CacheFirst',
             options: {
-              cacheName: 'kiosk-placeholders',
-              expiration: { maxEntries: 120, maxAgeSeconds: 30 * 24 * 60 * 60 },
+              cacheName: 'kiosk-images',
+              expiration: { maxEntries: 180, maxAgeSeconds: 30 * 24 * 60 * 60 },
               cacheableResponse: { statuses: [0, 200] },
             },
           },

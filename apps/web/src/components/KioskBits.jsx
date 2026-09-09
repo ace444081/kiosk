@@ -2,11 +2,21 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatPeso } from '@kiosk/shared';
 
+function resolveProductImageSource(src, sku) {
+  if (typeof src !== 'string' || !src) return src;
+  const match = src.match(/^\/placeholders\/products\/([a-z0-9-]+)\.svg$/i);
+  return match ? `/images/products/${sku || match[1]}.webp` : src;
+}
+
 /** Placeholder-aware product image with graceful degradation. */
-export function ProductImage({ src, alt, className, width, height }) {
+export function ProductImage({ src, sku, alt, className, width, height }) {
+  const [currentSrc, setCurrentSrc] = useState(() => resolveProductImageSource(src, sku));
   const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [src]);
-  if (failed || !src) {
+  useEffect(() => {
+    setCurrentSrc(resolveProductImageSource(src, sku));
+    setFailed(false);
+  }, [src, sku]);
+  if (failed || !currentSrc) {
     return (
       <div className={`product-image-fallback ${className || ''}`} role="img" aria-label={alt}>
         <span aria-hidden="true">☕</span>
@@ -15,13 +25,20 @@ export function ProductImage({ src, alt, className, width, height }) {
   }
   return (
     <img
-      src={src}
+      src={currentSrc}
       alt={alt}
       className={className}
       width={width}
       height={height}
       loading="lazy"
-      onError={() => setFailed(true)}
+      decoding="async"
+      onError={() => {
+        if (currentSrc !== src && src) {
+          setCurrentSrc(src);
+          return;
+        }
+        setFailed(true);
+      }}
     />
   );
 }

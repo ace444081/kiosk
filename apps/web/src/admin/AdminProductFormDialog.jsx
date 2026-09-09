@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BEVERAGE_CATEGORIES, formatPeso, SUGAR_LEVEL_GROUP } from '@kiosk/shared';
 import { adminPost } from '../services/admin-api.js';
+import { generatedImageForSku } from '../data/product-image-library.js';
 
 const initialForm = {
   sku: '',
@@ -63,6 +64,7 @@ export function AdminProductFormDialog({ categories, addons, onClose, onCreated 
     if (form.publication === 'unavailable') return { isPublished: true, isAvailable: false };
     return { isPublished: false, isAvailable: false };
   }, [form.publication]);
+  const generatedImage = generatedImageForSku(form.sku);
 
   const update = (key, value) => setForm((previous) => ({ ...previous, [key]: value }));
   const updateCategory = (categoryId) => {
@@ -282,6 +284,25 @@ export function AdminProductFormDialog({ categories, addons, onClose, onCreated 
                 />
               </label>
             </div>
+            {generatedImage && (
+              <div className="image-library">
+                <p className="image-library-heading">{t('admin.generatedImage')}</p>
+                <button
+                  type="button"
+                  className={`image-library-option ${form.imagePath === generatedImage ? 'is-selected' : ''}`}
+                  onClick={() => {
+                    setImageFailed(false);
+                    update('imagePath', generatedImage);
+                  }}
+                  disabled={busy}
+                  aria-pressed={form.imagePath === generatedImage}
+                >
+                  <img src={generatedImage} alt="" />
+                  <span>{t('admin.useGeneratedImage')}</span>
+                </button>
+                <span className="field-hint">{t('admin.imageLibraryHint')}</span>
+              </div>
+            )}
             <div className="product-preview" aria-live="polite">
               {form.imagePath && !imageFailed ? (
                 <img src={form.imagePath} alt="" onError={() => setImageFailed(true)} />

@@ -233,7 +233,13 @@ export function AdminMenu() {
         <div className="product-admin-list">
           {products.map((product) => (
             <article className="product-admin-card" key={product.id}>
-              <ProductImage src={product.imagePath} alt={product.name} width="76" height="64" />
+              <ProductImage
+                src={product.imagePath}
+                sku={product.sku}
+                alt={product.name}
+                width="76"
+                height="64"
+              />
               <div className="product-admin-info">
                 <div className="product-admin-name">{product.name}</div>
                 <div className="product-admin-meta">

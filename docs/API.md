@@ -39,7 +39,7 @@ Cacheable: `Cache-Control: public, max-age=5` (PWA stores the latest copy for of
           "name": "Crinkled Fries",
           "description": "Seasoned crinkled fries with your choice of flavor.",
           "priceCentavos": 6500,
-          "imagePath": "/placeholders/products/crinkled-fries.svg",
+          "imagePath": "/images/products/crinkled-fries.webp",
           "isAvailable": true,
           "stockQuantity": null,
           "stockStatus": "untracked",
@@ -258,7 +258,9 @@ Body: `{ "isAvailable": false, "version": 1 }`
 
 ### `PATCH /api/v1/admin/products/:id/catalog`
 
-Updates the customer-facing picture and optional product-level inventory.
+Updates the customer-facing picture and optional product-level inventory. The
+seeded catalog uses `/images/products/{sku}.webp`; older placeholder paths are
+still supported by the web client as a fallback.
 Body: `{ "imagePath": "/images/item.webp", "stockQuantity": 24, "version": 1 }`.
 Use `stockQuantity: null` for untracked inventory and `0` for sold out by stock.
 The update is audited and guarded by optimistic versioning.

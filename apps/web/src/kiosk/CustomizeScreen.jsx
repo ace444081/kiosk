@@ -186,7 +186,13 @@ export function CustomizeScreen() {
           ←{' '}
           {returnPath === '/kiosk/review' ? t('customize.backToReview') : t('customize.backToMenu')}
         </button>
-        <ProductImage src={product.imagePath} alt={product.name} width="600" height="400" />
+        <ProductImage
+          src={product.imagePath}
+          sku={product.sku}
+          alt={product.name}
+          width="600"
+          height="400"
+        />
         <h1>{product.name}</h1>
         <p>{product.description}</p>
         <Price centavos={product.priceCentavos} className="customize-price" />

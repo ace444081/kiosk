@@ -240,6 +240,11 @@ test.describe('admin console', () => {
     const row = page.locator('.product-admin-card', { hasText: '2pc. Hashbrown' }).first();
     await row.getByRole('button', { name: 'Picture & stock' }).click();
     const dialog = page.getByRole('dialog', { name: '2pc. Hashbrown' });
+    await dialog.getByRole('button', { name: 'Use this generated image' }).click();
+    await expect(dialog.locator('.catalog-image-preview img')).toHaveAttribute(
+      'src',
+      '/images/products/hashbrown-2pc.webp',
+    );
     await dialog.getByLabel('Stock quantity').fill('2');
     await dialog.getByRole('button', { name: 'Save' }).click();
     await expect(row).toContainText('2 remaining');

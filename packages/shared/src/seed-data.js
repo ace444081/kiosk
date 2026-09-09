@@ -550,7 +550,7 @@ export function buildSeedMenu() {
   const categories = CATEGORIES.map((c) => ({ ...c }));
   const products = PRODUCTS.map((p) => ({
     ...p,
-    imagePath: `/placeholders/products/${productImageSlug(p)}.svg`,
+    imagePath: `/images/products/${p.sku}.webp`,
     optionGroups: [
       ...(p.optionGroups || []),
       ...(BEVERAGE_CATEGORIES.has(p.categorySlug) ? [SUGAR_LEVEL_GROUP] : []),

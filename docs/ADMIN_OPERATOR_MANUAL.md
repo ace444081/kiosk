@@ -89,9 +89,11 @@ Open an order to see all items, add-ons, choices, and totals.
 - **Mark available** re-enables it immediately.
 - The **Updated** timestamp helps staff know when availability last
   changed.
-- Use **Picture & stock** to change the product image path/HTTPS URL or enter
-  the remaining finished-product quantity. Leave stock blank for untracked
-  inventory; `0` makes the item unavailable by stock.
+- Use **Picture & stock** to choose the generated catalog image for that SKU or
+  enter a local public path/HTTPS URL, then set the remaining finished-product
+  quantity. Leave stock blank for untracked inventory; `0` makes the item
+  unavailable by stock. The **Add menu item** dialog offers the same generated
+  image picker for seeded SKUs.
 - The Menu filter includes **Low stock**. Tracked products are labelled
   **Healthy**, **Low stock** (1–5 remaining), or **Sold out**; untracked items
   are labelled **Untracked**.

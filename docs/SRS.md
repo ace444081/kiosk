@@ -11,8 +11,8 @@
 A self-service ordering kiosk for a supervised school/client pilot. Customers
 place, customize, and pay for orders on a 10-inch landscape tablet; staff
 manage orders, payments, and menu availability from a protected console.
-The system is local-network only and uses placeholder brand assets until the
-client provides production artwork.
+The system is local-network only and uses generated catalog artwork plus
+placeholder brand assets until the client provides final production artwork.
 
 ### 1.2 Scope
 
@@ -193,8 +193,9 @@ requestId }`; UI localizes by stable code.
 ### FR8 PWA
 
 - FR8.1 Manifest, 192/512/maskable icons, offline shell, favicon.
-- FR8.2 Cache: shell, CSS/JS, icons/placeholders, latest successful public
-  menu response. Never cache admin/session/order/receipt/CSRF data.
+- FR8.2 Cache: shell, CSS/JS, icons, product artwork/placeholders, and the
+  latest successful public menu response. Never cache admin/session/order/
+  receipt/CSRF data.
 - FR8.3 Offline menu display allowed; checkout disabled offline.
 
 ### FR9 Backup/restore (see BACKUP_RESTORE.md)

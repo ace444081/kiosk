@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { adminPatch } from '../services/admin-api.js';
+import { generatedImageForSku } from '../data/product-image-library.js';
 
 export function AdminCatalogDialog({ product, onClose, onSaved }) {
   const { t } = useTranslation();
@@ -11,6 +12,7 @@ export function AdminCatalogDialog({ product, onClose, onSaved }) {
   const [imageFailed, setImageFailed] = useState(false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const generatedImage = generatedImageForSku(product.sku || product.id);
 
   const save = async (event) => {
     event.preventDefault();
@@ -68,6 +70,25 @@ export function AdminCatalogDialog({ product, onClose, onSaved }) {
               />
               <span className="field-hint">{t('admin.imageSourceHint')}</span>
             </label>
+            {generatedImage && (
+              <div className="image-library">
+                <p className="image-library-heading">{t('admin.generatedImage')}</p>
+                <button
+                  type="button"
+                  className={`image-library-option ${imagePath === generatedImage ? 'is-selected' : ''}`}
+                  onClick={() => {
+                    setImageFailed(false);
+                    setImagePath(generatedImage);
+                  }}
+                  disabled={busy}
+                  aria-pressed={imagePath === generatedImage}
+                >
+                  <img src={generatedImage} alt="" />
+                  <span>{t('admin.useGeneratedImage')}</span>
+                </button>
+                <span className="field-hint">{t('admin.imageLibraryHint')}</span>
+              </div>
+            )}
             <div className="catalog-image-preview">
               {!imageFailed && imagePath ? (
                 <img src={imagePath} alt={product.name} onError={() => setImageFailed(true)} />

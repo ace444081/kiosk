@@ -176,6 +176,7 @@ export function ReviewScreen() {
                     <article className="recommendation-card" key={product.id}>
                       <ProductImage
                         src={product.imagePath}
+                        sku={product.sku}
                         alt={product.name}
                         width="180"
                         height="120"

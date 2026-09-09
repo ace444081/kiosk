@@ -38,10 +38,11 @@ production POS. The following are intentional limitations of this version.
    attempt counters (acceptable for a single supervised site).
 7. **SSE events are in-process** — if the server restarts, connected admin
    pages fall back to 5-second polling automatically.
-8. **Placeholder brand assets** — logo, initial product images, category art, and
-   the demo QR are locally generated placeholders under
-   `apps/web/public/placeholders/` and `apps/web/public/icons/`; replace them
-   through the admin picture control or in place with client assets.
+8. **Brand artwork** — the logo, category art, and demo QR remain local
+   placeholders under `apps/web/public/placeholders/` and
+   `apps/web/public/icons/`. Product cards ship with generated catalog artwork
+   under `apps/web/public/images/products/`; replace any image through the
+   admin picture control or with the client’s final asset URL.
 9. **Kiosk preview totals are UI-computed** — the API remains
    authoritative; server prices always win (verified by tests).
 10. **No physical-device verification was performed** — Android/iPadOS
