@@ -28,7 +28,9 @@ function datesBetween(from, to) {
   const cursor = new Date(`${from}T00:00:00Z`);
   const end = new Date(`${to}T00:00:00Z`);
   if (!Number.isFinite(cursor.getTime()) || !Number.isFinite(end.getTime())) return dates;
-  while (cursor <= end && dates.length <= 366) {
+  // Keep multi-year custom reports complete while bounding accidental
+  // unbounded ranges to roughly a decade of daily buckets.
+  while (cursor <= end && dates.length <= 3660) {
     dates.push(cursor.toISOString().slice(0, 10));
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }

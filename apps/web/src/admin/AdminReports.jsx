@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { formatPeso } from '@kiosk/shared';
 import { api } from '../services/api.js';
 import { adminDownload } from '../services/admin-api.js';
-import { manilaDate } from '../utils/date-range.js';
+import { manilaDate, presetRange } from '../utils/date-range.js';
+import { AnalyticsRangeControls, AnalyticsTrendChart } from './AnalyticsWidgets.jsx';
 
 function today() {
   return manilaDate();
@@ -36,12 +37,22 @@ export function buildCashierReportSummary(staffPerformance = []) {
   };
 }
 
-function CashierStatistics({ staffPerformance = [] }) {
+function CashierStatistics({
+  staffPerformance = [],
+  staffOptions = staffPerformance,
+  staffFilter = 'all',
+  onStaffFilter,
+}) {
   const { t } = useTranslation();
-  const summary = buildCashierReportSummary(staffPerformance);
+  const options = staffOptions.length ? staffOptions : staffPerformance;
+  const visibleStaff =
+    staffFilter === 'all'
+      ? staffPerformance
+      : staffPerformance.filter((staff) => staff.username === staffFilter);
+  const summary = buildCashierReportSummary(visibleStaff);
   const maxCollected = Math.max(
     1,
-    ...staffPerformance.map((staff) => Number(staff.cashCollectedCentavos || 0)),
+    ...visibleStaff.map((staff) => Number(staff.cashCollectedCentavos || 0)),
   );
 
   return (
@@ -52,6 +63,19 @@ function CashierStatistics({ staffPerformance = [] }) {
           <h2 id="cashier-statistics-title">{t('admin.cashierStatistics')}</h2>
           <p>{t('admin.cashierStatisticsIntro')}</p>
         </div>
+        {onStaffFilter && (
+          <label className="report-staff-filter">
+            <span>{t('admin.staffFilter')}</span>
+            <select value={staffFilter} onChange={(event) => onStaffFilter(event.target.value)}>
+              <option value="all">{t('admin.allStaff')}</option>
+              {options.map((staff) => (
+                <option key={staff.username} value={staff.username}>
+                  {staff.username}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
       <div className="report-cashier-summary-grid">
         <div className="report-cashier-metric">
@@ -83,14 +107,14 @@ function CashierStatistics({ staffPerformance = [] }) {
         </div>
       </div>
 
-      {staffPerformance.length ? (
+      {visibleStaff.length ? (
         <>
           <div
             className="cashier-collection-chart"
             role="img"
             aria-label={t('admin.cashierCollectionChart')}
           >
-            {staffPerformance.map((staff) => {
+            {visibleStaff.map((staff) => {
               const collected = Number(staff.cashCollectedCentavos || 0);
               return (
                 <div className="cashier-collection-row" key={staff.username}>
@@ -121,7 +145,7 @@ function CashierStatistics({ staffPerformance = [] }) {
                 </tr>
               </thead>
               <tbody>
-                {staffPerformance.map((staff) => (
+                {visibleStaff.map((staff) => (
                   <tr key={staff.username}>
                     <td data-label={t('admin.staffMember')}>
                       <strong>{staff.username}</strong>
@@ -161,8 +185,12 @@ function CashierStatistics({ staffPerformance = [] }) {
 
 export function AdminReports() {
   const { t } = useTranslation();
-  const [from, setFrom] = useState(today);
-  const [to, setTo] = useState(today);
+  const currentDate = today();
+  const initialRange = presetRange('last1', currentDate);
+  const [preset, setPreset] = useState('last1');
+  const [from, setFrom] = useState(initialRange.from);
+  const [to, setTo] = useState(initialRange.to);
+  const [staffFilter, setStaffFilter] = useState('all');
   const [summary, setSummary] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [error, setError] = useState(null);
@@ -173,9 +201,10 @@ export function AdminReports() {
     setSummary(null);
     setAnalytics(null);
     try {
+      const staffQuery = staffFilter === 'all' ? '' : `&staff=${encodeURIComponent(staffFilter)}`;
       const [reportPayload, analyticsPayload] = await Promise.all([
-        api.get(`/admin/reports/summary?from=${from}&to=${to}`),
-        api.get(`/admin/analytics?from=${from}&to=${to}`),
+        api.get(`/admin/reports/summary?from=${from}&to=${to}${staffQuery}`),
+        api.get(`/admin/analytics?from=${from}&to=${to}${staffQuery}`),
       ]);
       setSummary(reportPayload.summary);
       setAnalytics(analyticsPayload.analytics);
@@ -183,7 +212,7 @@ export function AdminReports() {
     } catch (err) {
       setError(err);
     }
-  }, [from, to]);
+  }, [from, staffFilter, to]);
 
   useEffect(() => {
     load();
@@ -193,7 +222,10 @@ export function AdminReports() {
     setDownloading(true);
     setError(null);
     try {
-      const result = await adminDownload(`/admin/reports/soa.xlsx?from=${from}&to=${to}`);
+      const staffQuery = staffFilter === 'all' ? '' : `&staff=${encodeURIComponent(staffFilter)}`;
+      const result = await adminDownload(
+        `/admin/reports/soa.xlsx?from=${from}&to=${to}${staffQuery}`,
+      );
       const link = document.createElement('a');
       const url = URL.createObjectURL(result.blob);
       link.href = url;
@@ -209,6 +241,15 @@ export function AdminReports() {
     }
   };
 
+  const handlePreset = (nextPreset) => {
+    setPreset(nextPreset);
+    if (nextPreset !== 'custom') {
+      const range = presetRange(nextPreset, currentDate);
+      setFrom(range.from);
+      setTo(range.to);
+    }
+  };
+
   return (
     <div>
       <div className="admin-page-heading">
@@ -217,32 +258,24 @@ export function AdminReports() {
           <p>{t('admin.reportsIntro')}</p>
         </div>
       </div>
-      <section className="report-controls">
-        <label>
-          {t('admin.fromDate')}
-          <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
-        </label>
-        <label>
-          {t('admin.toDate')}
-          <input
-            type="date"
-            value={to}
-            min={from}
-            onChange={(event) => setTo(event.target.value)}
-          />
-        </label>
-        <button type="button" className="btn btn-secondary" onClick={load}>
-          {t('admin.refresh')}
-        </button>
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={!summary || downloading || from > to}
-          onClick={download}
-        >
-          {downloading ? t('admin.preparingExport') : t('admin.exportOperations')}
-        </button>
-      </section>
+      <AnalyticsRangeControls
+        from={from}
+        to={to}
+        preset={preset}
+        onPreset={handlePreset}
+        onFrom={(value) => {
+          setPreset('custom');
+          setFrom(value);
+        }}
+        onTo={(value) => {
+          setPreset('custom');
+          setTo(value);
+        }}
+        onRefresh={load}
+        onExport={download}
+        downloading={downloading}
+        invalid={!from || !to || from > to || !summary}
+      />
       {from > to && (
         <div className="alert alert-danger" role="alert">
           {t('admin.invalidDateRange')}
@@ -282,7 +315,19 @@ export function AdminReports() {
               </div>
             </div>
           </div>
-          <CashierStatistics staffPerformance={analytics.staffPerformance || []} />
+          <AnalyticsTrendChart
+            daily={analytics.daily}
+            from={from}
+            to={to}
+            title={t('admin.dailyActivity')}
+            description={t('admin.reportTrendHint')}
+          />
+          <CashierStatistics
+            staffPerformance={analytics.staffPerformance || []}
+            staffOptions={analytics.availableStaff || []}
+            staffFilter={staffFilter}
+            onStaffFilter={setStaffFilter}
+          />
           <div className="simulated-note">{t('admin.soaDemoNotice')}</div>
           <p className="report-note">{t('admin.anonymousOrderNote')}</p>
         </>

@@ -84,6 +84,15 @@ export default defineConfig({
       '/api': { target: API_TARGET, changeOrigin: false },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          charts: ['recharts'],
+        },
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     globals: true,

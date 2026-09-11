@@ -21,6 +21,8 @@ export function MenuScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [activeCategory, setActiveCategory] = useState('all');
+  const [pageTurn, setPageTurn] = useState('forward');
+  const [pageKey, setPageKey] = useState(0);
   const [search, setSearch] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -68,6 +70,14 @@ export function MenuScreen() {
   const startNewSession = () => {
     clearSession();
     navigate('/kiosk');
+  };
+
+  const changeCategory = (nextCategory) => {
+    if (nextCategory === activeCategory) return;
+    const tabs = ['all', ...categories.map((category) => category.id)];
+    setPageTurn(tabs.indexOf(nextCategory) >= tabs.indexOf(activeCategory) ? 'forward' : 'back');
+    setPageKey((previous) => previous + 1);
+    setActiveCategory(nextCategory);
   };
 
   const goCustomize = (product) => {
@@ -161,71 +171,77 @@ export function MenuScreen() {
           </div>
         )}
 
-        <nav className="category-nav" aria-label={t('menu.title')}>
-          <button
-            type="button"
-            className={`category-btn ${activeCategory === 'all' ? 'active' : ''}`}
-            onClick={() => setActiveCategory('all')}
-          >
-            {t('menu.allCategories')}
-          </button>
-          {categories.map((category) => (
+        <div className="book-menu-frame">
+          <nav className="category-nav book-category-nav" aria-label={t('menu.title')}>
             <button
               type="button"
-              key={category.id}
-              className={`category-btn ${activeCategory === category.id ? 'active' : ''}`}
-              onClick={() => setActiveCategory(category.id)}
+              className={`category-btn ${activeCategory === 'all' ? 'active' : ''}`}
+              onClick={() => changeCategory('all')}
             >
-              {category.name}
+              {t('menu.allCategories')}
             </button>
-          ))}
-        </nav>
+            {categories.map((category) => (
+              <button
+                type="button"
+                key={category.id}
+                className={`category-btn ${activeCategory === category.id ? 'active' : ''}`}
+                onClick={() => changeCategory(category.id)}
+              >
+                {category.name}
+              </button>
+            ))}
+          </nav>
 
-        <div className="product-grid">
-          {products.length === 0 && (
-            <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
-              <h2>{t('menu.searchNoResults')}</h2>
-            </div>
-          )}
-          {products.map((product) => (
-            <article
-              className={`card product-card ${product.isAvailable ? '' : 'sold-out'}`}
-              key={product.id}
-            >
-              <ProductImage
-                src={product.imagePath}
-                sku={product.sku}
-                alt={product.name}
-                width="600"
-                height="400"
-              />
-              <div className="product-info">
-                <h2 className="product-name">{product.name}</h2>
-                <p className="product-desc">{product.description}</p>
-                {product.stockQuantity != null && product.isAvailable && (
-                  <p
-                    className={`stock-note ${product.stockStatus === 'low' ? 'stock-note-low' : ''}`}
-                  >
-                    {t('menu.stockRemaining', { count: product.stockQuantity })}
-                  </p>
-                )}
-                <div className="product-footer">
-                  <span className="product-price">{formatPeso(product.priceCentavos)}</span>
-                  {product.isAvailable ? (
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={() => goCustomize(product)}
-                    >
-                      {product.optionGroups?.length > 0 ? t('menu.customize') : t('menu.addToCart')}
-                    </button>
-                  ) : (
-                    <span className="sold-out-tag">{t('menu.soldOut')}</span>
-                  )}
+          <div className={`book-page book-page-${pageTurn}`} key={pageKey}>
+            <div className="product-grid">
+              {products.length === 0 && (
+                <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
+                  <h2>{t('menu.searchNoResults')}</h2>
                 </div>
-              </div>
-            </article>
-          ))}
+              )}
+              {products.map((product) => (
+                <article
+                  className={`card product-card ${product.isAvailable ? '' : 'sold-out'}`}
+                  key={product.id}
+                >
+                  <ProductImage
+                    src={product.imagePath}
+                    sku={product.sku}
+                    alt={product.name}
+                    width="600"
+                    height="400"
+                  />
+                  <div className="product-info">
+                    <h2 className="product-name">{product.name}</h2>
+                    <p className="product-desc">{product.description}</p>
+                    {product.stockQuantity != null && product.isAvailable && (
+                      <p
+                        className={`stock-note ${product.stockStatus === 'low' ? 'stock-note-low' : ''}`}
+                      >
+                        {t('menu.stockRemaining', { count: product.stockQuantity })}
+                      </p>
+                    )}
+                    <div className="product-footer">
+                      <span className="product-price">{formatPeso(product.priceCentavos)}</span>
+                      {product.isAvailable ? (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => goCustomize(product)}
+                        >
+                          {product.optionGroups?.length > 0
+                            ? t('menu.customize')
+                            : t('menu.addToCart')}
+                        </button>
+                      ) : (
+                        <span className="sold-out-tag">{t('menu.soldOut')}</span>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 

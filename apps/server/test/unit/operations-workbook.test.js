@@ -71,6 +71,7 @@ describe('createOperationsWorkbook', () => {
       auditEvents: [],
       catalog: [],
       generatedBy: 'test-admin',
+      staffFilter: 'cashier-a',
     });
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer);
@@ -91,5 +92,9 @@ describe('createOperationsWorkbook', () => {
     expect(workbook.getWorksheet('Daily Summary').getCell('F2').value).toBe(100);
     expect(workbook.getWorksheet('Cashier Statistics').getCell('A2').value).toBe('cashier-a');
     expect(workbook.getWorksheet('Cashier Statistics').getCell('D2').value).toBe(100);
+    expect(workbook.getWorksheet('Overview').getCell('A5').value).toBe('Staff filter: cashier-a');
+    expect(workbook.getWorksheet('Statement of Account').getCell('A5').value).toBe(
+      'Staff filter: cashier-a',
+    );
   });
 });

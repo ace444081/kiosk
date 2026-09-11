@@ -45,9 +45,16 @@ function addTitle(sheet, title, period, generatedBy, columnEnd = 'H') {
   sheet.getCell('A4').font = { italic: true, color: { argb: 'FF526177' } };
 }
 
-function addSummarySheet(workbook, { summary, analytics, generatedBy }) {
+function addStaffScope(sheet, staffFilter) {
+  if (!staffFilter || staffFilter === 'all') return;
+  sheet.getCell('A5').value = `Staff filter: ${safeText(staffFilter)}`;
+  sheet.getCell('A5').font = { bold: true, color: { argb: 'FF704B00' } };
+}
+
+function addSummarySheet(workbook, { summary, analytics, generatedBy, staffFilter }) {
   const sheet = workbook.addWorksheet('Overview', { views: [{ showGridLines: false }] });
   addTitle(sheet, 'Sweet Gonz - Operations and Sales', analytics, generatedBy, 'H');
+  addStaffScope(sheet, staffFilter);
   sheet.getColumn(1).width = 34;
   sheet.getColumn(2).width = 18;
   sheet.getColumn(3).width = 56;
@@ -142,11 +149,12 @@ function addSummarySheet(workbook, { summary, analytics, generatedBy }) {
   return sheet;
 }
 
-function addStatementSheet(workbook, summary, generatedBy) {
+function addStatementSheet(workbook, summary, generatedBy, staffFilter) {
   const statement = workbook.addWorksheet('Statement of Account', {
     views: [{ showGridLines: false }],
   });
   addTitle(statement, 'Sweet Gonz - Statement of Account', summary, generatedBy, 'D');
+  addStaffScope(statement, staffFilter);
   statement.getCell('A6').value = 'Real cash only';
   statement.getCell('A6').font = { bold: true, color: { argb: 'FF102440' } };
   statement.addRow(['Completed cash', amount(summary.completedCashCentavos)]);
@@ -494,14 +502,15 @@ export async function createOperationsWorkbook({
   auditEvents,
   catalog,
   generatedBy,
+  staffFilter = 'all',
 }) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Sweet Gonz Kiosk';
   workbook.created = new Date();
   workbook.properties.title = `Sweet Gonz Operations ${analytics.from} to ${analytics.to}`;
 
-  addSummarySheet(workbook, { summary, analytics, generatedBy });
-  addStatementSheet(workbook, summary, generatedBy);
+  addSummarySheet(workbook, { summary, analytics, generatedBy, staffFilter });
+  addStatementSheet(workbook, summary, generatedBy, staffFilter);
   addDailySheet(workbook, analytics);
   addOrdersSheet(workbook, orders);
   addItemsSheet(workbook, items);

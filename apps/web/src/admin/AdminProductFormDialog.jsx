@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BEVERAGE_CATEGORIES, formatPeso, SUGAR_LEVEL_GROUP } from '@kiosk/shared';
-import { adminPost } from '../services/admin-api.js';
+import { adminPatch, adminPost } from '../services/admin-api.js';
 import { generatedImageForSku } from '../data/product-image-library.js';
 
 const initialForm = {
@@ -18,6 +18,37 @@ const initialForm = {
   addonIds: [],
   optionGroups: [],
 };
+
+function formFromProduct(product) {
+  if (!product) return { ...initialForm, addonIds: [], optionGroups: [] };
+  return {
+    ...initialForm,
+    sku: product.sku,
+    categoryId: product.categoryId,
+    name: product.name,
+    descriptionEn: product.descriptionEn || '',
+    descriptionFil: product.descriptionFil || '',
+    price: String(Number(product.priceCentavos || 0) / 100),
+    imagePath: product.imagePath || '',
+    sortOrder: String(product.sortOrder || 0),
+    publication: !product.isPublished ? 'draft' : product.isAvailable ? 'available' : 'unavailable',
+    stockQuantity: product.stockQuantity == null ? '' : String(product.stockQuantity),
+    addonIds: [...(product.addonIds || [])],
+    optionGroups: (product.optionGroups || []).map((group) => ({
+      key: group.key,
+      nameEn: group.nameEn,
+      nameFil: group.nameFil,
+      isRequired: Boolean(group.isRequired),
+      minSelect: String(group.minSelect),
+      maxSelect: String(group.maxSelect),
+      options: (group.options || []).map((option) => ({
+        nameEn: option.nameEn,
+        nameFil: option.nameFil,
+        price: String(Number(option.priceCentavos || 0) / 100),
+      })),
+    })),
+  };
+}
 
 function newOptionGroup(index) {
   return {
@@ -52,9 +83,16 @@ function centsFromPeso(value) {
   return Number.isFinite(parsed) ? Math.round(parsed * 100) : NaN;
 }
 
-export function AdminProductFormDialog({ categories, addons, onClose, onCreated }) {
+export function AdminProductFormDialog({
+  categories,
+  addons,
+  product = null,
+  onClose,
+  onCreated,
+  onUpdated,
+}) {
   const { t } = useTranslation();
-  const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState(() => formFromProduct(product));
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
@@ -111,13 +149,12 @@ export function AdminProductFormDialog({ categories, addons, onClose, onCreated 
     }));
   };
 
-  const create = async (event) => {
+  const save = async (event) => {
     event.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const payload = await adminPost('/admin/products', {
-        sku: form.sku.trim(),
+      const editorPayload = {
         categoryId: form.categoryId,
         name: form.name.trim(),
         descriptionEn: form.descriptionEn.trim(),
@@ -141,10 +178,19 @@ export function AdminProductFormDialog({ categories, addons, onClose, onCreated 
             priceCentavos: centsFromPeso(option.price),
           })),
         })),
-      });
-      onCreated(payload.product);
+      };
+      const payload = product
+        ? await adminPatch(`/admin/products/${product.id}`, {
+            ...editorPayload,
+            version: product.version,
+          })
+        : await adminPost('/admin/products', { sku: form.sku.trim(), ...editorPayload });
+      if (product) onUpdated(payload.product);
+      else onCreated(payload.product);
     } catch (err) {
-      setError(err.message || t('admin.productCreateError'));
+      setError(
+        err.message || (product ? t('admin.productUpdateError') : t('admin.productCreateError')),
+      );
     } finally {
       setBusy(false);
     }
@@ -156,12 +202,14 @@ export function AdminProductFormDialog({ categories, addons, onClose, onCreated 
         className="admin-product-dialog"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="new-product-title"
+        aria-labelledby={product ? 'edit-product-title' : 'new-product-title'}
       >
         <div className="admin-dialog-heading">
           <div>
             <p className="admin-eyebrow">{t('admin.menu')}</p>
-            <h2 id="new-product-title">{t('admin.addProduct')}</h2>
+            <h2 id={product ? 'edit-product-title' : 'new-product-title'}>
+              {product ? t('admin.editProduct') : t('admin.addProduct')}
+            </h2>
             <p>{t('admin.productFormIntro')}</p>
           </div>
           <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>
@@ -169,7 +217,7 @@ export function AdminProductFormDialog({ categories, addons, onClose, onCreated 
           </button>
         </div>
 
-        <form onSubmit={create} className="admin-product-form">
+        <form onSubmit={save} className="admin-product-form">
           <fieldset>
             <legend>{t('admin.productIdentity')}</legend>
             <div className="admin-form-grid">
@@ -186,6 +234,8 @@ export function AdminProductFormDialog({ categories, addons, onClose, onCreated 
                 <input
                   required
                   value={form.sku}
+                  readOnly={Boolean(product)}
+                  disabled={Boolean(product)}
                   placeholder="baked-macaroni"
                   pattern="[a-z0-9]+(-[a-z0-9]+)*"
                   onChange={(event) => update('sku', event.target.value.toLowerCase())}
@@ -537,7 +587,11 @@ export function AdminProductFormDialog({ categories, addons, onClose, onCreated 
               {t('common.cancel')}
             </button>
             <button type="submit" className="btn btn-primary" disabled={busy || imageFailed}>
-              {busy ? t('common.loading') : t('admin.createProduct')}
+              {busy
+                ? t('common.loading')
+                : product
+                  ? t('admin.saveProduct')
+                  : t('admin.createProduct')}
             </button>
           </div>
         </form>

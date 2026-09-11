@@ -5,7 +5,6 @@ import { api } from '../services/api.js';
 import { adminPatch } from '../services/admin-api.js';
 import { ConfirmDialog, ProductImage } from '../components/KioskBits.jsx';
 import { AdminProductFormDialog } from './AdminProductFormDialog.jsx';
-import { AdminCatalogDialog } from './AdminCatalogDialog.jsx';
 
 function formatUpdatedAt(iso, locale) {
   try {
@@ -97,6 +96,24 @@ export function AdminMenu() {
         product.id === nextProduct.id ? { ...product, ...nextProduct } : product,
       ),
     );
+  };
+
+  const openEditor = async (product) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const payload = await api.get(`/admin/products/${product.id}`);
+      setEditingProduct({
+        ...product,
+        ...payload.product,
+        addonIds: payload.addonIds,
+        optionGroups: payload.optionGroups,
+      });
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const changeAvailability = async (product, isAvailable) => {
@@ -278,7 +295,7 @@ export function AdminMenu() {
                   type="button"
                   className="btn btn-secondary"
                   disabled={busy}
-                  onClick={() => setEditingProduct(product)}
+                  onClick={() => openEditor(product)}
                 >
                   {t('admin.manageCatalog')}
                 </button>
@@ -369,10 +386,12 @@ export function AdminMenu() {
         />
       )}
       {editingProduct && (
-        <AdminCatalogDialog
+        <AdminProductFormDialog
+          categories={categories}
+          addons={addons}
           product={editingProduct}
           onClose={() => setEditingProduct(null)}
-          onSaved={(product) => {
+          onUpdated={(product) => {
             mergeProduct(product);
             setEditingProduct(null);
           }}

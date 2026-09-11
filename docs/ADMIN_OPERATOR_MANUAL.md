@@ -89,11 +89,12 @@ Open an order to see all items, add-ons, choices, and totals.
 - **Mark available** re-enables it immediately.
 - The **Updated** timestamp helps staff know when availability last
   changed.
-- Use **Picture & stock** to choose the generated catalog image for that SKU or
-  enter a local public path/HTTPS URL, then set the remaining finished-product
-  quantity. Leave stock blank for untracked inventory; `0` makes the item
-  unavailable by stock. The **Add menu item** dialog offers the same generated
-  image picker for seeded SKUs.
+- Use **Edit item** to update the name, category, bilingual descriptions, price,
+  picture, choices, publication state, and stock in one save. The SKU remains
+  stable for order history. Choose a generated catalog image or enter a local
+  public path/HTTPS URL. Leave stock blank for untracked inventory; `0` makes
+  the item unavailable by stock. The **Add menu item** dialog offers the same
+  generated image picker for seeded SKUs.
 - The Menu filter includes **Low stock**. Tracked products are labelled
   **Healthy**, **Low stock** (1–5 remaining), or **Sold out**; untracked items
   are labelled **Untracked**.
@@ -122,8 +123,8 @@ session data, customer names, or contact fields.
 
 ## 8. What staff CANNOT do in this version
 
-- Edit prices, names, categories, add-ons, or recommendation pairings (ask the
-  operator).
+- Edit products or staff accounts from the staff workboard. Product edits stay
+  in the protected admin console.
 - Issue refunds (no refunds exist in the pilot).
 - See or cancel completed orders (completed cannot reopen; cancelled
   cannot restore).

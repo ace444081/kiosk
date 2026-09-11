@@ -74,9 +74,10 @@ public internet exposure, dark mode.
 - FR1.2 Welcome screen: placeholder logo, EN/FIL selector, "Start Order"/
   "Simulan ang Order", self-service instructions, full-screen landscape.
   Starting an order clears any previous completed session.
-- FR1.3 Menu screen: ~72 px header at ≥1024 px; category navigation; search;
-  flexible product grid; persistent cart panel ≈30% width at ≥1024 px; cart
-  drawer below 1024 px; horizontally scrollable categories; visible checkout;
+- FR1.3 Menu screen: ~72 px header at ≥1024 px; compact two-row phone/tablet
+  header; category navigation; search; flexible product grid; persistent cart
+  panel ≈30% width at ≥1024 px; cart drawer below 1024 px; horizontally
+  scrollable touch-safe categories; sticky mobile navigation; visible checkout;
   no horizontal page overflow.
 - FR1.4 Product cards show an image, name, description, price, availability,
   and Add/Customize. Sold-out items stay visible but disabled and marked
@@ -149,10 +150,13 @@ public internet exposure, dark mode.
   `Cache-Control: no-store` on authenticated responses.
 - FR5.3 Localhost dev: documented non-Secure cookie mode via environment.
   Production/pilot mode fails startup on inconsistent HTTPS/security config.
-- FR5.4 Dashboard: today's total orders, pending cash, placed, preparing,
+- FR5.4 Dashboard: period-aware total orders, pending cash, placed, preparing,
   ready, completed, cancelled, completed-sales total, connection/server
-  status. Only completed orders with `cash_received` or `demo_confirmed`
-  count toward completed sales; demo totals labeled simulated.
+  status, and an interactive trend chart. Presets cover 1/7/30 days, current
+  month, current year, and custom ranges; chart buckets adapt from daily to
+  weekly, monthly, or yearly. Only completed orders with `cash_received` or
+  `demo_confirmed` count toward completed sales; demo totals are labeled
+  simulated.
 - FR5.5 Order queue: newest-first, order number, time, payment
   method/state, total, preparation status, elapsed indicator, date/status/
   payment filters, exact order-number search, bilingual empty/error states,
@@ -166,9 +170,14 @@ public internet exposure, dark mode.
 - FR5.7 Payment workflow: cash `pending_cash→cash_received`; demo remains
   `demo_confirmed`; no refunds.
 - FR5.8 Menu availability and inventory: search/filter products, including
-  low-stock items, mark available or sold out, edit tracked quantity and
-  picture, and see last-update time. No price/name/category/add-on editing in
-  this version.
+  low-stock items, mark available or sold out, and edit every product field
+  used by the kiosk (name, category, price, descriptions, image, sort order,
+  stock, add-ons, option groups, and publication state). SKU/URL-safe IDs are
+  immutable; updates use optimistic concurrency and are audited.
+- FR5.9 Reports: statement-of-account export plus the same interactive,
+  range-aware trend chart and a future-proof staff filter populated from the
+  staff accounts returned by the API. Scoped exports identify the selected
+  staff member in the workbook overview.
 
 ### FR6 Persistence, numbering, and audit
 
@@ -186,7 +195,9 @@ public internet exposure, dark mode.
   (Idempotency-Key header required; client prices ignored), `GET
 /api/v1/orders/:orderNumber/receipt?token=`, `GET /api/v1/health`.
 - FR7.2 Admin: session POST/GET/DELETE, orders list/detail, status PATCH,
-  payment PATCH, products list, availability PATCH, summary, events (SSE).
+  payment PATCH, products list/detail/PATCH, availability PATCH, summary,
+  range-aware analytics (optional staff scope), SOA export (optional staff
+  scope), and events (SSE).
 - FR7.3 Consistent error envelope `{ error: { code, message, fieldErrors },
 requestId }`; UI localizes by stable code.
 

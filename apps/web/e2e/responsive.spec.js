@@ -9,6 +9,8 @@ import {
 } from './helpers.js';
 
 const KIOSK_VIEWPORTS = [
+  { name: 'kiosk-390x844-phone', width: 390, height: 844 },
+  { name: 'kiosk-600x960-large-phone', width: 600, height: 960 },
   { name: 'kiosk-1024x600', width: 1024, height: 600 },
   { name: 'kiosk-1280x800', width: 1280, height: 800 },
   { name: 'kiosk-1366x768', width: 1366, height: 768 },
@@ -74,6 +76,29 @@ test.describe('responsive layouts - no horizontal overflow', () => {
     await expect(trigger).toBeVisible();
     await trigger.click();
     await expect(page.locator('.cart-drawer .cart-panel')).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  });
+
+  test('kiosk phone layout keeps the header, categories, and cart reachable', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await startOrder(page);
+    await expect(page.locator('.kiosk-header')).toHaveCSS('display', 'grid');
+    await expect(page.locator('.kiosk-search input')).toBeVisible();
+    await expect(page.locator('.book-category-nav')).toHaveCSS('position', 'sticky');
+    await expect(page.locator('.book-category-nav')).toHaveCSS('top', '123px');
+    await expect(page.locator('.cart-drawer-trigger')).toBeVisible();
+    await expect(page.locator('.product-card').first()).toHaveCSS('display', 'grid');
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await expect(page.locator('.kiosk-header')).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  });
+
+  test('kiosk tablet layout uses two readable menu columns', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await startOrder(page);
+    await expect(page.locator('.product-grid')).toHaveCSS('grid-template-columns', /345px 345px/);
+    await expect(page.locator('.book-category-nav')).toHaveCSS('top', '126px');
+    await expect(page.locator('.cart-drawer-trigger')).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
 });

@@ -5,6 +5,7 @@ import {
   catalogPatchSchema,
   auditLogQuerySchema,
   createProductSchema,
+  updateProductSchema,
   listOrdersQuerySchema,
   listProductsQuerySchema,
   paymentPatchSchema,
@@ -52,8 +53,11 @@ function serializeProduct(product, categoryById) {
     name: product.name,
     categoryId: product.category_id,
     categoryName: categoryById.get(product.category_id)?.name_en || product.category_id,
+    descriptionEn: product.description_en,
+    descriptionFil: product.description_fil,
     priceCentavos: product.price_centavos,
     imagePath: product.image_path,
+    sortOrder: product.sort_order,
     isAvailable: isEnabled && hasStock,
     isEnabled,
     isPublished: product.is_published === 1,
@@ -87,6 +91,55 @@ function defaultSugarOptionGroup() {
       nameFil: option.nameFil,
       priceCentavos: option.priceCentavos,
     })),
+  };
+}
+
+function optionGroupKey(group, productId) {
+  for (const separator of ['--', '__']) {
+    const prefix = `${productId}${separator}`;
+    if (String(group.id || '').startsWith(prefix)) return group.id.slice(prefix.length);
+  }
+  return String(group.id || 'choice');
+}
+
+function serializeProductEditor(product, addonIds, groups, options) {
+  const optionsByGroup = new Map();
+  for (const option of options) {
+    const list = optionsByGroup.get(option.group_id) || [];
+    list.push(option);
+    optionsByGroup.set(option.group_id, list);
+  }
+  return {
+    addonIds,
+    optionGroups: groups.map((group) => ({
+      key: optionGroupKey(group, product.id),
+      nameEn: group.name_en,
+      nameFil: group.name_fil,
+      isRequired: group.is_required === 1 || group.is_required === true,
+      minSelect: group.min_select,
+      maxSelect: group.max_select,
+      options: (optionsByGroup.get(group.id) || []).map((option) => ({
+        nameEn: option.name_en,
+        nameFil: option.name_fil,
+        priceCentavos: option.price_centavos,
+      })),
+    })),
+  };
+}
+
+/**
+ * Cashier reports are scoped to the staff member who confirmed payment. A
+ * demo-wallet order has no cashier attribution and therefore is not included
+ * in a dedicated cashier view. Keep the item rows aligned with the scoped
+ * order rows so exports and product totals cannot leak unrelated activity.
+ */
+function scopeReportRows(orders, items, staffFilter) {
+  if (!staffFilter || staffFilter === 'all') return { orders, items };
+  const scopedOrders = orders.filter((order) => order.payment_confirmed_by === staffFilter);
+  const orderNumbers = new Set(scopedOrders.map((order) => order.order_number));
+  return {
+    orders: scopedOrders,
+    items: items.filter((item) => orderNumbers.has(item.order_number)),
   };
 }
 
@@ -276,6 +329,110 @@ export function adminRoutes({
       res.json({
         products: rows.map((p) => serializeProduct(p, categoryById)),
       });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get('/products/:id', requireAuth, async (req, res, next) => {
+    try {
+      const product = await catalog.findProductById(req.params.id);
+      if (!product) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
+      const [categories, addonIds, groups] = await Promise.all([
+        catalog.listCategories(),
+        catalog.addonIdsForProduct(product.id),
+        catalog.optionGroupsForProduct(product.id),
+      ]);
+      const options = await catalog.optionsForGroups(groups.map((group) => group.id));
+      const categoryById = new Map(categories.map((category) => [category.id, category]));
+      res.json({
+        product: serializeProduct(product, categoryById),
+        ...serializeProductEditor(product, addonIds, groups, options),
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.patch('/products/:id', requireAuth, requireCsrf, async (req, res, next) => {
+    try {
+      const input = parseOrThrow(updateProductSchema, req.body);
+      const product = await catalog.findProductById(req.params.id);
+      if (!product) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
+      if (product.version !== input.version) {
+        const categoryById = new Map(
+          (await catalog.listCategories()).map((category) => [category.id, category]),
+        );
+        return res.status(409).json({
+          error: { code: 'STALE_VERSION', message: 'Product was modified by another action' },
+          product: serializeProduct(product, categoryById),
+          requestId: req.id,
+        });
+      }
+
+      const categories = await catalog.listCategories();
+      if (!categories.some((category) => category.id === input.categoryId)) {
+        throw badRequest('CATEGORY_NOT_FOUND', 'Choose an existing category');
+      }
+      const addonIds = new Set((await catalog.listAddons()).map((addon) => addon.id));
+      const unknownAddon = input.addonIds.find((addonId) => !addonIds.has(addonId));
+      if (unknownAddon) throw badRequest('ADDON_NOT_FOUND', 'Choose existing add-ons only');
+
+      const optionGroups = [...input.optionGroups];
+      if (
+        BEVERAGE_CATEGORIES.has(input.categoryId) &&
+        !optionGroups.some((group) => group.key === SUGAR_LEVEL_GROUP.sku)
+      ) {
+        optionGroups.push(defaultSugarOptionGroup());
+      }
+      const updated = await catalog.updateProduct(
+        req.params.id,
+        { ...input, optionGroups },
+        input.version,
+      );
+      if (!updated) throw conflict('STALE_VERSION', 'Product was modified by another action');
+
+      await audit.record({
+        actor: req.session.username,
+        action: 'PRODUCT_UPDATED',
+        targetType: 'product',
+        targetId: updated.id,
+        previousState: {
+          categoryId: product.category_id,
+          name: product.name,
+          descriptionEn: product.description_en,
+          descriptionFil: product.description_fil,
+          priceCentavos: product.price_centavos,
+          imagePath: product.image_path,
+          isAvailable: product.is_available === 1,
+          isPublished: product.is_published === 1,
+          stockQuantity: product.stock_quantity,
+          sortOrder: product.sort_order,
+          version: product.version,
+        },
+        newState: {
+          categoryId: updated.category_id,
+          name: updated.name,
+          descriptionEn: updated.description_en,
+          descriptionFil: updated.description_fil,
+          priceCentavos: updated.price_centavos,
+          imagePath: updated.image_path,
+          isAvailable: updated.is_available === 1,
+          isPublished: updated.is_published === 1,
+          stockQuantity: updated.stock_quantity,
+          sortOrder: updated.sort_order,
+          version: updated.version,
+        },
+        requestId: req.id,
+        ip: req.ip,
+        userAgent: req.get('User-Agent'),
+      });
+      const categoryById = new Map(categories.map((category) => [category.id, category]));
+      eventBus.publish({
+        type: EVENT_TYPES.CATALOG_CHANGED,
+        data: { productId: updated.id, action: 'updated', version: updated.version },
+      });
+      res.json({ product: serializeProduct(updated, categoryById) });
     } catch (err) {
       next(err);
     }
@@ -558,14 +715,26 @@ export function adminRoutes({
         orders.itemsForReport(range),
         accountDirectory.listStaff(),
       ]);
+      const selectedStaff = range.staff && range.staff !== 'all' ? range.staff : null;
+      const scoped = scopeReportRows(reportOrders, reportItems, selectedStaff);
       const analytics = buildDashboardAnalytics({
-        orders: reportOrders,
-        items: reportItems,
-        staffAccounts,
+        orders: scoped.orders,
+        items: scoped.items,
+        staffAccounts: selectedStaff
+          ? staffAccounts.filter((staff) => staff.username === selectedStaff)
+          : staffAccounts,
         ...range,
       });
       res.json({
-        analytics,
+        analytics: {
+          ...analytics,
+          // Keep the selector future-proof even when a scoped view only
+          // returns the selected cashier's performance row.
+          availableStaff: staffAccounts.map((staff) => ({
+            username: staff.username,
+            active: staff.is_active === 1 || staff.is_active === true,
+          })),
+        },
         connection: {
           status: 'ok',
           serverTime: new Date().toISOString(),
@@ -601,7 +770,10 @@ export function adminRoutes({
   router.get('/reports/summary', requireAuth, async (req, res, next) => {
     try {
       const range = parseOrThrow(reportQuerySchema, req.query);
-      res.json({ summary: buildSoaSummary(await orders.listForReport(range), range) });
+      const reportOrders = await orders.listForReport(range);
+      const selectedStaff = range.staff && range.staff !== 'all' ? range.staff : null;
+      const scoped = scopeReportRows(reportOrders, [], selectedStaff);
+      res.json({ summary: buildSoaSummary(scoped.orders, range) });
     } catch (err) {
       next(err);
     }
@@ -615,25 +787,33 @@ export function adminRoutes({
         orders.itemsForReport(range),
         accountDirectory.listStaff(),
       ]);
-      const summary = buildSoaSummary(reportOrders, range);
+      const selectedStaff = range.staff && range.staff !== 'all' ? range.staff : null;
+      const scoped = scopeReportRows(reportOrders, reportItems, selectedStaff);
+      const summary = buildSoaSummary(scoped.orders, range);
       const analytics = buildDashboardAnalytics({
-        orders: reportOrders,
-        items: reportItems,
-        staffAccounts,
+        orders: scoped.orders,
+        items: scoped.items,
+        staffAccounts: selectedStaff
+          ? staffAccounts.filter((staff) => staff.username === selectedStaff)
+          : staffAccounts,
         ...range,
       });
       const [auditEvents, catalogProducts] = await Promise.all([
         audit.list({ from: range.from, to: range.to, limit: 500 }),
         catalog.listProducts({ publishedOnly: false }),
       ]);
+      const scopedAuditEvents = selectedStaff
+        ? auditEvents.filter((event) => event.actor === selectedStaff)
+        : auditEvents;
       const workbook = await createOperationsWorkbook({
         summary,
         analytics,
-        orders: reportOrders,
-        items: reportItems,
-        auditEvents,
+        orders: scoped.orders,
+        items: scoped.items,
+        auditEvents: scopedAuditEvents,
         catalog: catalogProducts,
         generatedBy: req.session.username,
+        staffFilter: selectedStaff || 'all',
       });
       await audit.record({
         actor: req.session.username,

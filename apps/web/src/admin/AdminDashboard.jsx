@@ -11,6 +11,7 @@ import {
   OrderTimer,
   useOrderClock,
 } from './OrderTimer.jsx';
+import { AnalyticsRangeControls, AnalyticsTrendChart } from './AnalyticsWidgets.jsx';
 
 function ConnectionPill({ connection }) {
   const { t } = useTranslation();
@@ -50,95 +51,8 @@ function orderPriority(order) {
   return 5;
 }
 
-function PeriodControls({
-  from,
-  to,
-  preset,
-  onPreset,
-  onFrom,
-  onTo,
-  onExport,
-  downloading,
-  invalid,
-}) {
-  const { t } = useTranslation();
-  return (
-    <div className="dashboard-controls" aria-label={t('admin.periodControls')}>
-      <label>
-        <span>{t('admin.period')}</span>
-        <select value={preset} onChange={(event) => onPreset(event.target.value)}>
-          <option value="today">{t('admin.rangeToday')}</option>
-          <option value="yesterday">{t('admin.rangeYesterday')}</option>
-          <option value="last7">{t('admin.rangeLast7')}</option>
-          <option value="last30">{t('admin.rangeLast30')}</option>
-          <option value="custom">{t('admin.rangeCustom')}</option>
-        </select>
-      </label>
-      <label>
-        <span>{t('admin.fromDate')}</span>
-        <input type="date" value={from} onChange={(event) => onFrom(event.target.value)} />
-      </label>
-      <label>
-        <span>{t('admin.toDate')}</span>
-        <input type="date" value={to} min={from} onChange={(event) => onTo(event.target.value)} />
-      </label>
-      <button
-        type="button"
-        className="btn btn-primary dashboard-export-button"
-        disabled={invalid || downloading}
-        onClick={onExport}
-      >
-        {downloading ? t('admin.preparingExport') : t('admin.exportOperations')}
-      </button>
-    </div>
-  );
-}
-
-function DailyTrend({ daily }) {
-  const { t } = useTranslation();
-  const visible = daily.slice(-14);
-  const maxValue = Math.max(
-    1,
-    ...visible.map((day) => Math.max(day.realCashCentavos, day.demoCentavos)),
-  );
-  return (
-    <section className="dashboard-panel dashboard-trend-panel">
-      <div className="dashboard-panel-heading">
-        <div>
-          <p className="dashboard-section-kicker">{t('admin.movement')}</p>
-          <h2>{t('admin.dailyActivity')}</h2>
-        </div>
-        <span className="dashboard-legend">
-          <span className="legend-swatch legend-swatch-cash" /> {t('admin.cashReceived')}
-          <span className="legend-swatch legend-swatch-demo" /> {t('admin.demoWalletSimulated')}
-        </span>
-      </div>
-      {visible.some((day) => day.orders > 0) ? (
-        <div className="dashboard-trend-chart" role="img" aria-label={t('admin.dailyActivity')}>
-          {visible.map((day) => (
-            <div className="dashboard-trend-column" key={day.businessDate}>
-              <div className="dashboard-trend-bars">
-                <span
-                  className="dashboard-trend-bar dashboard-trend-bar-cash"
-                  style={{ height: `${Math.max(3, (day.realCashCentavos / maxValue) * 100)}%` }}
-                  title={`${formatBusinessDate(day.businessDate)} cash ${formatPeso(day.realCashCentavos)}`}
-                />
-                <span
-                  className="dashboard-trend-bar dashboard-trend-bar-demo"
-                  style={{ height: `${Math.max(3, (day.demoCentavos / maxValue) * 100)}%` }}
-                  title={`${formatBusinessDate(day.businessDate)} demo ${formatPeso(day.demoCentavos)}`}
-                />
-              </div>
-              <strong>{day.orders}</strong>
-              <span>{day.businessDate.slice(5)}</span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="dashboard-empty-panel">{t('admin.noPeriodOrders')}</div>
-      )}
-    </section>
-  );
+function PeriodControls(props) {
+  return <AnalyticsRangeControls {...props} />;
 }
 
 function StatusBreakdown({ statusBreakdown }) {
@@ -337,8 +251,8 @@ export function AdminDashboard() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const today = manilaDate();
-  const initialRange = presetRange('today', today);
-  const [preset, setPreset] = useState('today');
+  const initialRange = presetRange('last1', today);
+  const [preset, setPreset] = useState('last1');
   const [from, setFrom] = useState(initialRange.from);
   const [to, setTo] = useState(initialRange.to);
   const [downloading, setDownloading] = useState(false);
@@ -502,7 +416,13 @@ export function AdminDashboard() {
       </section>
 
       <div className="dashboard-chart-grid">
-        <DailyTrend daily={analytics.daily} />
+        <AnalyticsTrendChart
+          daily={analytics.daily}
+          from={from}
+          to={to}
+          title={t('admin.dailyActivity')}
+          description={t('admin.dailyActivityHint')}
+        />
         <StatusBreakdown statusBreakdown={analytics.statusBreakdown} />
       </div>
 

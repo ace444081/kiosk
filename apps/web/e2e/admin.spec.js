@@ -30,6 +30,7 @@ test.describe('admin console', () => {
     await page.getByRole('textbox', { name: 'Password', exact: true }).fill('e2e-pass-1234');
     await page.getByRole('button', { name: /Sign in/ }).click();
     await expect(page).toHaveURL(/\/admin$/);
+    await expect(page.getByRole('link', { name: 'Staff workboard' })).toHaveCount(0);
   });
 
   test('dashboard shows today summary and the new order', async ({ page }) => {
@@ -233,20 +234,20 @@ test.describe('admin console', () => {
     await expect(rowAgain.locator('.badge-completed')).toContainText(/Available/);
   });
 
-  test('admin can update a product picture path and tracked stock', async ({ page }) => {
+  test('admin can edit a product picture and tracked stock', async ({ page }) => {
     await adminLogin(page);
     await page.getByRole('link', { name: /Menu/ }).click();
     await page.locator('#product-search').fill('hashbrown');
     const row = page.locator('.product-admin-card', { hasText: '2pc. Hashbrown' }).first();
-    await row.getByRole('button', { name: 'Picture & stock' }).click();
-    const dialog = page.getByRole('dialog', { name: '2pc. Hashbrown' });
+    await row.getByRole('button', { name: 'Edit item' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Edit menu item' });
     await dialog.getByRole('button', { name: 'Use this generated image' }).click();
-    await expect(dialog.locator('.catalog-image-preview img')).toHaveAttribute(
+    await expect(dialog.locator('.product-preview img')).toHaveAttribute(
       'src',
       '/images/products/hashbrown-2pc.webp',
     );
     await dialog.getByLabel('Stock quantity').fill('2');
-    await dialog.getByRole('button', { name: 'Save' }).click();
+    await dialog.getByRole('button', { name: 'Save menu item' }).click();
     await expect(row).toContainText('2 remaining');
 
     const kiosk = await page.context().newPage();
@@ -257,10 +258,10 @@ test.describe('admin console', () => {
     await kiosk.close();
 
     // Return the shared e2e catalog to its untracked baseline.
-    await row.getByRole('button', { name: 'Picture & stock' }).click();
-    const restoreDialog = page.getByRole('dialog', { name: '2pc. Hashbrown' });
+    await row.getByRole('button', { name: 'Edit item' }).click();
+    const restoreDialog = page.getByRole('dialog', { name: 'Edit menu item' });
     await restoreDialog.getByLabel('Stock quantity').fill('');
-    await restoreDialog.getByRole('button', { name: 'Save' }).click();
+    await restoreDialog.getByRole('button', { name: 'Save menu item' }).click();
     await expect(row).toContainText('Untracked');
   });
 });

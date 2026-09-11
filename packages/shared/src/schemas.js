@@ -147,47 +147,55 @@ const productOptionGroupSchema = z
     }
   });
 
+const productEditorFields = {
+  categoryId: z.string().trim().min(1).max(64),
+  name: z.string().trim().min(2).max(120),
+  descriptionEn: z.string().trim().min(2).max(500),
+  descriptionFil: z.string().trim().min(2).max(500),
+  priceCentavos: z.number().int().min(0).max(1_000_000),
+  imagePath: imagePathSchema,
+  sortOrder: z.number().int().min(0).max(10_000).default(0),
+  isPublished: z.boolean().default(false),
+  isAvailable: z.boolean().default(false),
+  stockQuantity: z.number().int().min(0).max(1_000_000).nullable().default(null),
+  addonIds: z.array(z.string().trim().min(1).max(64)).max(24).default([]),
+  optionGroups: z.array(productOptionGroupSchema).max(6).default([]),
+};
+
+function refineProductEditor(product, ctx) {
+  const keys = product.optionGroups.map((group) => group.key);
+  if (new Set(keys).size !== keys.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['optionGroups'],
+      message: 'Option group keys must be unique',
+    });
+  }
+  if (new Set(product.addonIds).size !== product.addonIds.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['addonIds'],
+      message: 'Add-ons must be selected only once',
+    });
+  }
+  if (!product.isPublished && product.isAvailable) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['isAvailable'],
+      message: 'Draft products cannot be available',
+    });
+  }
+}
+
 export const createProductSchema = z
-  .object({
-    sku: productSlugSchema,
-    categoryId: z.string().trim().min(1).max(64),
-    name: z.string().trim().min(2).max(120),
-    descriptionEn: z.string().trim().min(2).max(500),
-    descriptionFil: z.string().trim().min(2).max(500),
-    priceCentavos: z.number().int().min(0).max(1_000_000),
-    imagePath: imagePathSchema,
-    sortOrder: z.number().int().min(0).max(10_000).default(0),
-    isPublished: z.boolean().default(false),
-    isAvailable: z.boolean().default(false),
-    stockQuantity: z.number().int().min(0).max(1_000_000).nullable().default(null),
-    addonIds: z.array(z.string().trim().min(1).max(64)).max(24).default([]),
-    optionGroups: z.array(productOptionGroupSchema).max(6).default([]),
-  })
+  .object({ sku: productSlugSchema, ...productEditorFields })
   .strict()
-  .superRefine((product, ctx) => {
-    const keys = product.optionGroups.map((group) => group.key);
-    if (new Set(keys).size !== keys.length) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['optionGroups'],
-        message: 'Option group keys must be unique',
-      });
-    }
-    if (new Set(product.addonIds).size !== product.addonIds.length) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['addonIds'],
-        message: 'Add-ons must be selected only once',
-      });
-    }
-    if (!product.isPublished && product.isAvailable) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['isAvailable'],
-        message: 'Draft products cannot be available',
-      });
-    }
-  });
+  .superRefine(refineProductEditor);
+
+export const updateProductSchema = z
+  .object({ ...productEditorFields, version: z.number().int().min(1) })
+  .strict()
+  .superRefine(refineProductEditor);
 
 export const publicationPatchSchema = z
   .object({
@@ -239,6 +247,7 @@ export const reportQuerySchema = z
   .object({
     from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    staff: z.string().trim().max(64).optional(),
   })
   .refine((range) => range.from <= range.to, {
     path: ['to'],

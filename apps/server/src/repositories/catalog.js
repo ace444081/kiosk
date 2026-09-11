@@ -135,6 +135,78 @@ export class CatalogRepository {
     return result.changes ? this.findProductById(productId) : null;
   }
 
+  updateProduct(productId, product, expectedVersion) {
+    const update = this.db.transaction((input) => {
+      const result = this.db
+        .prepare(
+          `UPDATE products SET category_id = ?, name = ?, description_en = ?, description_fil = ?,
+             price_centavos = ?, image_path = ?, is_available = ?, is_published = ?,
+             stock_quantity = ?, sort_order = ?, version = version + 1,
+             updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+           WHERE id = ? AND version = ?`,
+        )
+        .run(
+          input.categoryId,
+          input.name,
+          input.descriptionEn,
+          input.descriptionFil,
+          input.priceCentavos,
+          input.imagePath,
+          input.isAvailable ? 1 : 0,
+          input.isPublished ? 1 : 0,
+          input.stockQuantity,
+          input.sortOrder,
+          productId,
+          expectedVersion,
+        );
+      if (!result.changes) return false;
+
+      this.db.prepare('DELETE FROM product_addons WHERE product_id = ?').run(productId);
+      const insertAddon = this.db.prepare(
+        'INSERT INTO product_addons (product_id, addon_id) VALUES (?, ?)',
+      );
+      for (const addonId of input.addonIds) insertAddon.run(productId, addonId);
+
+      this.db.prepare('DELETE FROM product_option_groups WHERE product_id = ?').run(productId);
+      const insertGroup = this.db.prepare(
+        `INSERT INTO product_option_groups
+          (id, product_id, name_en, name_fil, is_required, min_select, max_select, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      );
+      const insertOption = this.db.prepare(
+        `INSERT INTO product_options
+          (id, group_id, name_en, name_fil, price_centavos, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      );
+      input.optionGroups.forEach((group, groupIndex) => {
+        const groupId = `${productId}--${group.key}`;
+        insertGroup.run(
+          groupId,
+          productId,
+          group.nameEn,
+          group.nameFil,
+          group.isRequired ? 1 : 0,
+          group.minSelect,
+          group.maxSelect,
+          groupIndex,
+        );
+        group.options.forEach((option, optionIndex) => {
+          insertOption.run(
+            `${groupId}--${optionIndex + 1}`,
+            groupId,
+            option.nameEn,
+            option.nameFil,
+            option.priceCentavos,
+            optionIndex,
+          );
+        });
+      });
+      return true;
+    });
+    if (!update(product)) return null;
+    return this.findProductById(productId);
+  }
+
   reserveStock(requirements) {
     for (const { productId, quantity } of requirements) {
       const product = this.findProductById(productId);

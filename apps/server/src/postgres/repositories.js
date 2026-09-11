@@ -293,6 +293,78 @@ export class PgCatalogRepository {
     );
   }
 
+  async updateProduct(productId, product, expectedVersion) {
+    const updated = await this.db.transaction(async (tx) => {
+      const row = await tx.one(
+        `UPDATE products SET category_id = $1, name = $2, description_en = $3,
+           description_fil = $4, price_centavos = $5, image_path = $6,
+           is_available = $7, is_published = $8, stock_quantity = $9, sort_order = $10,
+           version = version + 1, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $11 AND version = $12 RETURNING *`,
+        [
+          product.categoryId,
+          product.name,
+          product.descriptionEn,
+          product.descriptionFil,
+          product.priceCentavos,
+          product.imagePath,
+          product.isAvailable,
+          product.isPublished,
+          product.stockQuantity,
+          product.sortOrder,
+          productId,
+          expectedVersion,
+        ],
+      );
+      if (!row) return null;
+
+      await tx.query('DELETE FROM product_addons WHERE product_id = $1', [productId]);
+      for (const addonId of product.addonIds) {
+        await tx.query('INSERT INTO product_addons (product_id, addon_id) VALUES ($1, $2)', [
+          productId,
+          addonId,
+        ]);
+      }
+
+      await tx.query('DELETE FROM product_option_groups WHERE product_id = $1', [productId]);
+      for (const [groupIndex, group] of product.optionGroups.entries()) {
+        const groupId = `${productId}--${group.key}`;
+        await tx.query(
+          `INSERT INTO product_option_groups
+            (id, product_id, name_en, name_fil, is_required, min_select, max_select, sort_order)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            groupId,
+            productId,
+            group.nameEn,
+            group.nameFil,
+            group.isRequired,
+            group.minSelect,
+            group.maxSelect,
+            groupIndex,
+          ],
+        );
+        for (const [optionIndex, option] of group.options.entries()) {
+          await tx.query(
+            `INSERT INTO product_options
+              (id, group_id, name_en, name_fil, price_centavos, sort_order)
+             VALUES ($1, $2, $3, $4, $5, $6)`,
+            [
+              `${groupId}--${optionIndex + 1}`,
+              groupId,
+              option.nameEn,
+              option.nameFil,
+              option.priceCentavos,
+              optionIndex,
+            ],
+          );
+        }
+      }
+      return row;
+    });
+    return normalizeCatalog(updated);
+  }
+
   async reserveStock(requirements) {
     for (const { productId, quantity } of requirements) {
       const product = await this.db.one(

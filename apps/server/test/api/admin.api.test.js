@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import ExcelJS from 'exceljs';
 import request from 'supertest';
 import http from 'node:http';
 import { makeTestApp, createTestAdmin, loginAgent, cashOrderPayload } from '../utils.js';
@@ -337,10 +338,76 @@ describe('admin API - auth, CSRF, rate limiting, workflow, summary', () => {
       expect(stale.body.error.code).toBe('STALE_VERSION');
     });
 
-    it('does not allow editing prices or names via the admin API', async () => {
-      const { agent } = await loginAgent(ctx.app, { username: 'boss', password: 'boss-pass-123' });
-      const res = await agent.patch('/api/v1/admin/products/americano').send({ priceCentavos: 1 });
-      expect([404, 405]).toContain(res.status);
+    it('returns the full editor shape and updates every product field safely', async () => {
+      const { agent, csrfToken } = await loginAgent(ctx.app, {
+        username: 'boss',
+        password: 'boss-pass-123',
+      });
+      const detail = await agent.get('/api/v1/admin/products/cafe-latte');
+      expect(detail.status).toBe(200);
+      expect(detail.body.product.sku).toBe('cafe-latte');
+      expect(detail.body.product.descriptionEn).toContain('steamed milk');
+      expect(detail.body.optionGroups).toEqual(
+        expect.arrayContaining([expect.objectContaining({ key: 'sugar-level' })]),
+      );
+
+      const update = await agent
+        .patch('/api/v1/admin/products/cafe-latte')
+        .set('X-CSRF-Token', csrfToken)
+        .send({
+          categoryId: 'drip-coffee',
+          name: 'Cafe Latte Updated',
+          descriptionEn: 'Updated English description.',
+          descriptionFil: 'Updated Filipino description.',
+          priceCentavos: 5700,
+          imagePath: '/images/products/cafe-latte.webp',
+          sortOrder: 22,
+          isPublished: true,
+          isAvailable: true,
+          stockQuantity: 12,
+          addonIds: ['addon-espresso-shot'],
+          optionGroups: detail.body.optionGroups,
+          version: detail.body.product.version,
+        });
+      expect(update.status).toBe(200);
+      expect(update.body.product.name).toBe('Cafe Latte Updated');
+      expect(update.body.product.priceCentavos).toBe(5700);
+      expect(update.body.product.stockQuantity).toBe(12);
+
+      const updatedDetail = await agent.get('/api/v1/admin/products/cafe-latte');
+      expect(updatedDetail.body.product.descriptionFil).toBe('Updated Filipino description.');
+      expect(updatedDetail.body.addonIds).toEqual(['addon-espresso-shot']);
+      expect(updatedDetail.body.optionGroups).toEqual(
+        expect.arrayContaining([expect.objectContaining({ key: 'sugar-level' })]),
+      );
+
+      const stale = await agent
+        .patch('/api/v1/admin/products/cafe-latte')
+        .set('X-CSRF-Token', csrfToken)
+        .send({
+          categoryId: 'drip-coffee',
+          name: 'Stale edit',
+          descriptionEn: 'Stale English description.',
+          descriptionFil: 'Stale Filipino description.',
+          priceCentavos: 5700,
+          imagePath: '/images/products/cafe-latte.webp',
+          sortOrder: 22,
+          isPublished: true,
+          isAvailable: true,
+          stockQuantity: 12,
+          addonIds: [],
+          optionGroups: detail.body.optionGroups,
+          version: detail.body.product.version,
+        });
+      expect(stale.status).toBe(409);
+      expect(stale.body.error.code).toBe('STALE_VERSION');
+
+      const audit = await agent.get('/api/v1/admin/audit-events');
+      expect(audit.body.events).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ action: 'PRODUCT_UPDATED', targetId: 'cafe-latte' }),
+        ]),
+      );
     });
 
     it('creates a draft product that stays hidden and unorderable until published', async () => {
@@ -607,6 +674,55 @@ describe('admin API - auth, CSRF, rate limiting, workflow, summary', () => {
       expect(analytics.body.analytics.daily[0].businessDate).toBe(date);
       expect(analytics.body.analytics.serviceTimes.sampleCount).toBeGreaterThanOrEqual(2);
 
+      createTestAdmin(ctx.db, {
+        username: 'report-cashier',
+        password: 'report-cashier-pass',
+        role: 'staff',
+      });
+      const cashierAgent = request.agent(ctx.app);
+      const cashierSession = await cashierAgent.post('/api/v1/staff/session').send({
+        username: 'report-cashier',
+        password: 'report-cashier-pass',
+      });
+      expect(cashierSession.status).toBe(200);
+      const cashierCsrf = cashierSession.body.csrfToken;
+      const cashierOrder = await placeCashOrder(agent);
+      const cashierPaid = await cashierAgent
+        .patch(`/api/v1/staff/orders/${cashierOrder.id}/payment`)
+        .set('X-CSRF-Token', cashierCsrf)
+        .send({ paymentStatus: 'cash_received', version: cashierOrder.version });
+      expect(cashierPaid.status).toBe(200);
+      let currentCashierOrder = cashierPaid.body.order;
+      for (const nextStatus of ['preparing', 'ready', 'completed']) {
+        const step = await cashierAgent
+          .patch(`/api/v1/staff/orders/${cashierOrder.id}/status`)
+          .set('X-CSRF-Token', cashierCsrf)
+          .send({ status: nextStatus, version: currentCashierOrder.version });
+        expect(step.status).toBe(200);
+        currentCashierOrder = step.body.order;
+      }
+
+      const filteredAnalytics = await agent.get(
+        `/api/v1/admin/analytics?from=${date}&to=${date}&staff=report-cashier`,
+      );
+      expect(filteredAnalytics.status).toBe(200);
+      expect(filteredAnalytics.body.analytics.staffPerformance).toEqual([
+        expect.objectContaining({ username: 'report-cashier' }),
+      ]);
+      expect(filteredAnalytics.body.analytics.summary.completedOrders).toBe(1);
+      expect(filteredAnalytics.body.analytics.summary.completedSalesDemoCentavos).toBe(0);
+      expect(filteredAnalytics.body.analytics.availableStaff).toEqual(
+        expect.arrayContaining([expect.objectContaining({ username: 'report-cashier' })]),
+      );
+
+      const filteredSummary = await agent.get(
+        `/api/v1/admin/reports/summary?from=${date}&to=${date}&staff=report-cashier`,
+      );
+      expect(filteredSummary.status).toBe(200);
+      expect(filteredSummary.body.summary.orderCount).toBe(1);
+      expect(filteredSummary.body.summary.completedCashCentavos).toBe(cashierOrder.totalCentavos);
+      expect(filteredSummary.body.summary.completedDemoCentavos).toBe(0);
+
       const exported = await agent
         .get(`/api/v1/admin/reports/soa.xlsx?from=${date}&to=${date}`)
         .buffer(true)
@@ -624,10 +740,27 @@ describe('admin API - auth, CSRF, rate limiting, workflow, summary', () => {
       );
       expect(exported.body.subarray(0, 2).toString()).toBe('PK');
 
+      const scopedExport = await agent
+        .get(`/api/v1/admin/reports/soa.xlsx?from=${date}&to=${date}&staff=report-cashier`)
+        .buffer(true)
+        .parse((response, callback) => {
+          const chunks = [];
+          response.on('data', (chunk) => chunks.push(chunk));
+          response.on('end', () => callback(null, Buffer.concat(chunks)));
+        });
+      expect(scopedExport.status).toBe(200);
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(scopedExport.body);
+      expect(workbook.getWorksheet('Overview').getCell('A5').value).toBe(
+        'Staff filter: report-cashier',
+      );
+      expect(workbook.getWorksheet('Orders').rowCount).toBe(2);
+
       const activity = await agent.get('/api/v1/admin/audit-events?action=SOA_EXPORTED');
-      expect(activity.body.events).toHaveLength(1);
-      expect(activity.body.events[0].newState.completedCashCentavos).toBeGreaterThan(0);
-      expect(activity.body.events[0].newState.completedDemoCentavos).toBe(4500);
+      expect(activity.body.events).toHaveLength(2);
+      expect(activity.body.events[0].newState.completedDemoCentavos).toBe(0);
+      expect(activity.body.events[1].newState.completedCashCentavos).toBeGreaterThan(0);
+      expect(activity.body.events[1].newState.completedDemoCentavos).toBe(4500);
     });
   });
 

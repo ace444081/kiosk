@@ -23,10 +23,10 @@ production POS. The following are intentional limitations of this version.
 
 ## Product limitations of this version
 
-1. **Menu editing** — admins can create products, update product pictures,
-   stock quantities, publish/hide products, and toggle availability. Editing
-   the price, name, category, description, modifier structure, or recommendation
-   pairings of an existing product still requires a code change + reseed.
+1. **Menu editing** — admins can create products and edit the complete kiosk
+   item definition (name, category, price, descriptions, image, sort order,
+   stock, add-ons, option groups, and publication state). Product SKU/URL-safe
+   IDs remain immutable after creation so existing order history stays stable.
 2. **Add-on compatibility matrix is provisional** and requires client
    confirmation before the pilot menu is finalized.
 3. **No refunds** — once completed or cancelled, orders are final.

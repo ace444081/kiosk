@@ -33,8 +33,15 @@ export function presetRange(preset, today = manilaDate()) {
     const date = shiftBusinessDate(today, -1);
     return { from: date, to: date };
   }
+  if (preset === 'last1' || preset === 'today') return { from: today, to: today };
   if (preset === 'last7') return { from: shiftBusinessDate(today, -6), to: today };
   if (preset === 'last30') return { from: shiftBusinessDate(today, -29), to: today };
+  if (preset === 'month') {
+    return { from: `${today.slice(0, 7)}-01`, to: today };
+  }
+  if (preset === 'year') {
+    return { from: `${today.slice(0, 4)}-01-01`, to: today };
+  }
   return { from: today, to: today };
 }
 

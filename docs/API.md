@@ -248,6 +248,20 @@ version, updatedAt } ] }`. `stockStatus` is `untracked`, `healthy`, `low`, or
 `sold_out`; `isEnabled` is the manual sales switch; `isAvailable` also requires
 positive stock when inventory is tracked.
 
+### `GET /api/v1/admin/products/:id`
+
+Returns the editable product fields plus its selected add-ons and option
+groups. The SKU is the stable product identifier and is not changed by the
+editor.
+
+### `PATCH /api/v1/admin/products/:id`
+
+Updates the product name, category, bilingual descriptions, price, picture,
+sort order, publication/availability state, stock, add-ons, and option groups
+in one optimistic-versioned transaction. Send the full editable payload with
+`version`; a stale version returns `409 STALE_VERSION`. Beverage categories
+automatically retain the standard Sugar Level choices.
+
 ### `PATCH /api/v1/admin/products/:id/availability`
 
 Body: `{ "isAvailable": false, "version": 1 }`
@@ -289,7 +303,7 @@ The update is audited and guarded by optimistic versioning.
 Only completed orders with `cash_received` or `demo_confirmed` count toward
 completed sales. Demo amounts are simulated.
 
-### `GET /api/v1/admin/analytics?from=YYYY-MM-DD&to=YYYY-MM-DD`
+### `GET /api/v1/admin/analytics?from=YYYY-MM-DD&to=YYYY-MM-DD[&staff=username]`
 
 Returns the selected business-date range for the Operations and Sales
 dashboard. The response includes the period summary, daily activity, workflow
@@ -298,7 +312,11 @@ Real cash and simulated demo-wallet amounts are separate fields. It also
 includes `staffPerformance`, with one row for every staff account and metrics
 for cash-confirmed orders, cash collected, completed cash, average cash order,
 and the latest cash confirmation in the selected period. Cash attribution is
-based on the staff account that confirms the payment.
+based on the staff account that confirms the payment. When `staff` is supplied,
+the report is scoped to cash orders whose payment was confirmed by that account;
+the period totals, trend, product totals, and staff-performance rows then
+describe that account's activity. The response also includes `availableStaff`
+so a client can keep the selector current while a scoped view is active.
 
 ### `GET /api/v1/admin/summary`
 
@@ -325,17 +343,21 @@ Draft products cannot be available.
 
 Lists audit events filtered by action and optional business-date range.
 
-### `GET /api/v1/admin/reports/summary?from=YYYY-MM-DD&to=YYYY-MM-DD`
+### `GET /api/v1/admin/reports/summary?from=YYYY-MM-DD&to=YYYY-MM-DD[&staff=username]`
 
 Returns a cash-first statement summary with completed cash, simulated demo,
-and pending cash kept separate.
+and pending cash kept separate. When `staff` is supplied, only orders whose
+cash payment was confirmed by that staff account are included.
 
-### `GET /api/v1/admin/reports/soa.xlsx?from=YYYY-MM-DD&to=YYYY-MM-DD`
+### `GET /api/v1/admin/reports/soa.xlsx?from=YYYY-MM-DD&to=YYYY-MM-DD[&staff=username]`
 
 Downloads the operations workbook for the selected period and records an
 `SOA_EXPORTED` audit event. The workbook includes a Cashier Statistics sheet
 with cash confirmations, collected cash, completed cash, averages, and the
-latest confirmation time for each staff account.
+latest confirmation time for each staff account. With `staff`, all order,
+item, product, service-time, cashier, and staff audit sections are scoped to
+that account, and the selected staff is recorded on the Overview and
+Statement of Account sheets.
 
 ### `GET /api/v1/admin/events`
 
