@@ -42,6 +42,17 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api/, /^\/admin/],
         runtimeCaching: [
           {
+            // Uploaded product photos are served by the API with a versioned
+            // query string, so a new photo naturally creates a new cache key.
+            urlPattern: ({ url }) => /^\/api\/v1\/products\/[^/]+\/image$/.test(url.pathname),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'kiosk-uploaded-images',
+              expiration: { maxEntries: 180, maxAgeSeconds: 30 * 24 * 60 * 60 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
             // Latest successful public menu response (offline menu display).
             urlPattern: ({ url }) => url.pathname === '/api/v1/menu',
             handler: 'NetworkFirst',
