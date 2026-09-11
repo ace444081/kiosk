@@ -56,6 +56,29 @@ export function publicRoutes({
   });
 
   /**
+   * Public product photography endpoint. Uploaded photos are stored in the
+   * product image table and exposed with a long cache lifetime; the versioned
+   * image path written to the product record busts the cache on replacement.
+   */
+  router.get('/products/:id/image', async (req, res, next) => {
+    try {
+      const image = catalog.getProductImage ? await catalog.getProductImage(req.params.id) : null;
+      if (!image?.image_data) {
+        return res.status(404).json({
+          error: { code: 'PRODUCT_IMAGE_NOT_FOUND', message: 'Product image not found' },
+          requestId: req.id,
+        });
+      }
+      res.setHeader('Content-Type', image.mime_type);
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      return res.send(Buffer.from(image.image_data));
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  /**
    * GET /api/v1/menu?locale=en|fil
    * Localized menu with categories, products, add-ons and option groups.
    * Cacheable: the PWA stores the latest successful response for offline use.

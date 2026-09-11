@@ -1,7 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { adminPatch } from '../services/admin-api.js';
-import { generatedImageForSku } from '../data/product-image-library.js';
+import { adminPatch, adminUploadImage } from '../services/admin-api.js';
 
 export function AdminCatalogDialog({ product, onClose, onSaved }) {
   const { t } = useTranslation();
@@ -12,17 +11,61 @@ export function AdminCatalogDialog({ product, onClose, onSaved }) {
   const [imageFailed, setImageFailed] = useState(false);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
-  const generatedImage = generatedImageForSku(product.sku || product.id);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+
+  useEffect(
+    () => () => {
+      if (imagePreview && globalThis.URL?.revokeObjectURL) {
+        globalThis.URL.revokeObjectURL(imagePreview);
+      }
+    },
+    [imagePreview],
+  );
+
+  const chooseImage = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setError(t('admin.photoTypeError'));
+      event.target.value = '';
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError(t('admin.photoSizeError'));
+      event.target.value = '';
+      return;
+    }
+    setError(null);
+    setImageFailed(false);
+    if (imagePreview && globalThis.URL?.revokeObjectURL) {
+      globalThis.URL.revokeObjectURL(imagePreview);
+    }
+    setImageFile(file);
+    setImagePreview(globalThis.URL?.createObjectURL ? globalThis.URL.createObjectURL(file) : null);
+  };
 
   const save = async (event) => {
     event.preventDefault();
     setBusy(true);
     setError(null);
     try {
+      let version = product.version;
+      let nextImagePath =
+        String(imagePath || '').trim() || product.imagePath || '/placeholders/logo.svg';
+      if (imageFile) {
+        const imagePayload = await adminUploadImage(
+          `/admin/products/${product.id}/image`,
+          imageFile,
+          version,
+        );
+        version = imagePayload.product.version;
+        nextImagePath = imagePayload.product.imagePath;
+      }
       const payload = await adminPatch(`/admin/products/${product.id}/catalog`, {
-        imagePath: imagePath.trim(),
+        imagePath: nextImagePath,
         stockQuantity: stock === '' ? null : Number.parseInt(stock, 10),
-        version: product.version,
+        version,
       });
       onSaved(payload.product);
     } catch (err) {
@@ -61,7 +104,6 @@ export function AdminCatalogDialog({ product, onClose, onSaved }) {
             <label>
               {t('admin.imageSource')}
               <input
-                required
                 value={imagePath}
                 onChange={(event) => {
                   setImageFailed(false);
@@ -70,28 +112,28 @@ export function AdminCatalogDialog({ product, onClose, onSaved }) {
               />
               <span className="field-hint">{t('admin.imageSourceHint')}</span>
             </label>
-            {generatedImage && (
-              <div className="image-library">
-                <p className="image-library-heading">{t('admin.generatedImage')}</p>
-                <button
-                  type="button"
-                  className={`image-library-option ${imagePath === generatedImage ? 'is-selected' : ''}`}
-                  onClick={() => {
-                    setImageFailed(false);
-                    setImagePath(generatedImage);
-                  }}
+            <div className="admin-image-upload">
+              <label htmlFor="catalog-photo-upload">{t('admin.productPhoto')}</label>
+              <div className="admin-image-upload-control">
+                <input
+                  id="catalog-photo-upload"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={chooseImage}
                   disabled={busy}
-                  aria-pressed={imagePath === generatedImage}
-                >
-                  <img src={generatedImage} alt="" />
-                  <span>{t('admin.useGeneratedImage')}</span>
-                </button>
-                <span className="field-hint">{t('admin.imageLibraryHint')}</span>
+                />
+                <span className="field-hint">
+                  {imageFile ? imageFile.name : t('admin.choosePhotoHint')}
+                </span>
               </div>
-            )}
+            </div>
             <div className="catalog-image-preview">
-              {!imageFailed && imagePath ? (
-                <img src={imagePath} alt={product.name} onError={() => setImageFailed(true)} />
+              {!imageFailed && (imagePreview || imagePath) ? (
+                <img
+                  src={imagePreview || imagePath}
+                  alt={product.name}
+                  onError={() => setImageFailed(true)}
+                />
               ) : (
                 <span>{t('admin.imageUnavailable')}</span>
               )}

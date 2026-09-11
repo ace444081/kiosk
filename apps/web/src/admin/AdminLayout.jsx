@@ -141,6 +141,9 @@ export function AdminLayout() {
           <NavLink to="/admin/menu" className={({ isActive }) => (isActive ? 'active' : '')}>
             {t('admin.menu')}
           </NavLink>
+          <NavLink to="/admin/accounts" className={({ isActive }) => (isActive ? 'active' : '')}>
+            {t('admin.accounts')}
+          </NavLink>
           <NavLink to="/admin/activity" className={({ isActive }) => (isActive ? 'active' : '')}>
             {t('admin.activity')}
           </NavLink>

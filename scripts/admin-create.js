@@ -22,9 +22,11 @@ const arg = (name) => {
 
 let username = arg('username');
 let password = arg('password');
+const nameArg = arg('name');
+const email = arg('email') || null;
 const role =
   arg('role') || (process.env.npm_lifecycle_event === 'staff:create' ? 'staff' : 'admin');
-const roles = ['admin', 'staff'];
+const roles = ['admin', 'staff', 'cashier', 'kitchen', 'serving'];
 
 async function askHidden(rl, prompt) {
   // readline promises cannot hide input; use a raw-mode helper.
@@ -73,6 +75,7 @@ if (!username || !password) {
   console.error('Username and password are required.');
   process.exit(1);
 }
+const fullName = nameArg || username;
 if (password.length < 8) {
   console.error('Password must be at least 8 characters.');
   process.exit(1);
@@ -97,6 +100,9 @@ if (env.databaseProvider === 'postgres') {
     username,
     passwordHash: AdminAuthService.hashPassword(password),
     role,
+    fullName,
+    email,
+    mustChangePassword: true,
   });
   console.log(`Staff account created: ${admin.username} [${admin.role}] (id: ${admin.id})`);
   await db.close();
@@ -114,6 +120,9 @@ if (env.databaseProvider === 'postgres') {
     username,
     passwordHash: AdminAuthService.hashPassword(password),
     role,
+    fullName,
+    email,
+    mustChangePassword: true,
   });
   console.log(`Staff account created: ${admin.username} [${admin.role}] (id: ${admin.id})`);
   db.close();

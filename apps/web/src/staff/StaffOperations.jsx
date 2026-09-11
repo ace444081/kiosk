@@ -253,6 +253,12 @@ function nextAction(lane, selected) {
 
 export function StaffOperations() {
   const { session, logout, sessionStation } = useOutletContext();
+  const allowedLanes = useMemo(() => {
+    if (session.role === 'cashier') return ['payment'];
+    if (session.role === 'kitchen') return ['preparation'];
+    if (session.role === 'serving') return ['handoff'];
+    return Object.keys(laneMeta);
+  }, [session.role]);
   const [selected, setSelected] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -272,12 +278,13 @@ export function StaffOperations() {
   const allOrders = useMemo(
     () => [
       ...new Map(
-        Object.values(lanes)
+        allowedLanes
+          .map((lane) => lanes[lane])
           .flatMap((lane) => lane.orders)
           .map((order) => [order.id, order]),
       ).values(),
     ],
-    [lanes],
+    [allowedLanes, lanes],
   );
   const liveNow = useOrderClock(allOrders.length > 0);
   const selectedOrder = selected
@@ -285,13 +292,14 @@ export function StaffOperations() {
     : null;
   const priorityItems = useMemo(() => {
     return Object.entries(lanes)
+      .filter(([lane]) => allowedLanes.includes(lane))
       .flatMap(([lane, payload]) => payload.orders.map((order) => ({ lane, order })))
       .sort(
         (a, b) =>
           priorityScore(a, liveNow) - priorityScore(b, liveNow) ||
           new Date(a.order.createdAt).getTime() - new Date(b.order.createdAt).getTime(),
       );
-  }, [lanes, liveNow]);
+  }, [allowedLanes, lanes, liveNow]);
   const focusItem = priorityItems[0] || null;
   const upNextItems = priorityItems.slice(1, 5);
   const laterCount = Math.max(0, priorityItems.length - 5);
@@ -413,7 +421,10 @@ export function StaffOperations() {
       <section className="station-toolbar workboard-toolbar">
         <div>
           <p className="station-eyebrow">Today’s live operations</p>
-          <h1>{allOrders.length} orders visible across all functions</h1>
+          <h1>
+            {allOrders.length} {allOrders.length === 1 ? 'order' : 'orders'} visible across your
+            {allowedLanes.length === 1 ? ' station' : ' functions'}
+          </h1>
         </div>
         <div className="workboard-controls">
           <div className="workboard-view-toggle" role="group" aria-label="Workboard view">
@@ -524,43 +535,46 @@ export function StaffOperations() {
         </section>
       ) : (
         <section className="workboard-lanes" aria-busy={loading}>
-          {Object.entries(laneMeta).map(([lane, meta]) => (
-            <section className="workboard-lane" key={lane} aria-label={meta.title}>
-              <header className="workboard-lane-heading">
-                <div>
-                  <p>{meta.kicker}</p>
-                  <h2>{meta.title}</h2>
-                </div>
-                <strong>{lanes[lane].pagination.total}</strong>
-              </header>
-              <div className="workboard-lane-list">
-                {loading && lanes[lane].orders.length === 0 ? (
-                  Array.from({ length: 2 }, (_, index) => (
-                    <div className="ticket-skeleton" key={index} />
-                  ))
-                ) : lanes[lane].orders.length === 0 ? (
-                  <div className="station-empty">
-                    <span>Queue clear</span>
-                    <h2>Nothing waiting</h2>
-                    <p>{meta.empty}</p>
+          {allowedLanes.map((lane) => {
+            const meta = laneMeta[lane];
+            return (
+              <section className="workboard-lane" key={lane} aria-label={meta.title}>
+                <header className="workboard-lane-heading">
+                  <div>
+                    <p>{meta.kicker}</p>
+                    <h2>{meta.title}</h2>
                   </div>
-                ) : (
-                  lanes[lane].orders.map((order) => (
-                    <WorkboardTicket
-                      key={order.id}
-                      order={order}
-                      lane={lane}
-                      selected={selected?.id === order.id}
-                      onSelect={() =>
-                        setSelected(selected?.id === order.id ? null : { id: order.id, lane })
-                      }
-                      now={liveNow}
-                    />
-                  ))
-                )}
-              </div>
-            </section>
-          ))}
+                  <strong>{lanes[lane].pagination.total}</strong>
+                </header>
+                <div className="workboard-lane-list">
+                  {loading && lanes[lane].orders.length === 0 ? (
+                    Array.from({ length: 2 }, (_, index) => (
+                      <div className="ticket-skeleton" key={index} />
+                    ))
+                  ) : lanes[lane].orders.length === 0 ? (
+                    <div className="station-empty">
+                      <span>Queue clear</span>
+                      <h2>Nothing waiting</h2>
+                      <p>{meta.empty}</p>
+                    </div>
+                  ) : (
+                    lanes[lane].orders.map((order) => (
+                      <WorkboardTicket
+                        key={order.id}
+                        order={order}
+                        lane={lane}
+                        selected={selected?.id === order.id}
+                        onSelect={() =>
+                          setSelected(selected?.id === order.id ? null : { id: order.id, lane })
+                        }
+                        now={liveNow}
+                      />
+                    ))
+                  )}
+                </div>
+              </section>
+            );
+          })}
         </section>
       )}
       {error && connection !== 'offline' && <p className="station-error">{error.message}</p>}

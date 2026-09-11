@@ -68,10 +68,14 @@ describe('database behaviors', () => {
       '010_inventory_recommendations',
       '010_unify_staff_roles',
       '011_cashier_attribution',
+      '012_accounts_product_images',
     ]);
     const adminColumns = db.pragma('table_info(admins)').map((column) => column.name);
     const orderColumns = db.pragma('table_info(orders)').map((column) => column.name);
     expect(adminColumns).toContain('role');
+    expect(adminColumns).toEqual(
+      expect.arrayContaining(['full_name', 'employee_id', 'email', 'version']),
+    );
     expect(orderColumns).toEqual(
       expect.arrayContaining([
         'payment_confirmed_at',

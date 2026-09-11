@@ -6,6 +6,7 @@ import {
   MAX_CART_LINES,
   ORDER_STATUSES,
   PAYMENT_METHODS,
+  ACCOUNT_ROLES,
 } from './constants.js';
 
 export const localeSchema = z.enum(LOCALES);
@@ -51,6 +52,62 @@ export const adminLoginSchema = z
     password: z.string().min(1).max(128),
   })
   .strict();
+
+const accountUsernameSchema = z
+  .string()
+  .trim()
+  .min(3)
+  .max(64)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/, 'Use letters, numbers, dots, underscores, or hyphens');
+
+const accountEmailSchema = z.string().trim().max(160).email().nullable().optional();
+
+export const accountRoleSchema = z.enum(ACCOUNT_ROLES);
+
+export const createAccountSchema = z
+  .object({
+    fullName: z.string().trim().min(2).max(120),
+    username: accountUsernameSchema,
+    role: accountRoleSchema,
+    email: accountEmailSchema,
+    password: z.string().min(8).max(128),
+    passwordConfirmation: z.string().min(8).max(128),
+  })
+  .strict()
+  .refine((account) => account.password === account.passwordConfirmation, {
+    path: ['passwordConfirmation'],
+    message: 'Passwords must match',
+  });
+
+export const updateAccountSchema = z
+  .object({
+    version: z.number().int().min(1),
+    fullName: z.string().trim().min(2).max(120).optional(),
+    role: accountRoleSchema.optional(),
+    email: accountEmailSchema,
+    isActive: z.boolean().optional(),
+  })
+  .strict()
+  .refine(
+    (account) =>
+      account.fullName !== undefined ||
+      account.role !== undefined ||
+      account.email !== undefined ||
+      account.isActive !== undefined,
+    { message: 'Provide at least one account field to update' },
+  );
+
+export const resetAccountPasswordSchema = z
+  .object({
+    version: z.number().int().min(1),
+    password: z.string().min(8).max(128),
+    passwordConfirmation: z.string().min(8).max(128),
+  })
+  .strict()
+  .refine((account) => account.password === account.passwordConfirmation, {
+    path: ['passwordConfirmation'],
+    message: 'Passwords must match',
+  });
 
 export const statusPatchSchema = z
   .object({

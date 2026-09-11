@@ -12,6 +12,7 @@ import { AdminDashboard } from './admin/AdminDashboard.jsx';
 import { AdminOrders } from './admin/AdminOrders.jsx';
 import { AdminOrderDetail } from './admin/AdminOrderDetail.jsx';
 import { AdminMenu } from './admin/AdminMenu.jsx';
+import { AdminAccounts } from './admin/AdminAccounts.jsx';
 import { AdminActivity } from './admin/AdminActivity.jsx';
 import { AdminReports } from './admin/AdminReports.jsx';
 import { StandbyScreen } from './admin/StandbyScreen.jsx';
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="orders" element={<AdminOrders />} />
         <Route path="orders/:id" element={<AdminOrderDetail />} />
         <Route path="menu" element={<AdminMenu />} />
+        <Route path="accounts" element={<AdminAccounts />} />
         <Route path="activity" element={<AdminActivity />} />
         <Route path="reports" element={<AdminReports />} />
         <Route path="standby" element={<StandbyScreen />} />

@@ -241,14 +241,22 @@ test.describe('admin console', () => {
     const row = page.locator('.product-admin-card', { hasText: '2pc. Hashbrown' }).first();
     await row.getByRole('button', { name: 'Edit item' }).click();
     const dialog = page.getByRole('dialog', { name: 'Edit menu item' });
-    await dialog.getByRole('button', { name: 'Use this generated image' }).click();
-    await expect(dialog.locator('.product-preview img')).toHaveAttribute(
-      'src',
-      '/images/products/hashbrown-2pc.webp',
-    );
+    await dialog.locator('#product-photo-upload').setInputFiles({
+      name: 'hashbrown-menu.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+        'base64',
+      ),
+    });
+    await expect(dialog.getByText('hashbrown-menu.png')).toBeVisible();
     await dialog.getByLabel('Stock quantity').fill('2');
     await dialog.getByRole('button', { name: 'Save menu item' }).click();
     await expect(row).toContainText('2 remaining');
+    await expect(row.locator('img')).toHaveAttribute(
+      'src',
+      /\/api\/v1\/products\/hashbrown-2pc\/image\?v=/,
+    );
 
     const kiosk = await page.context().newPage();
     await kiosk.goto('/kiosk');
@@ -263,5 +271,34 @@ test.describe('admin console', () => {
     await restoreDialog.getByLabel('Stock quantity').fill('');
     await restoreDialog.getByRole('button', { name: 'Save menu item' }).click();
     await expect(row).toContainText('Untracked');
+  });
+
+  test('admin can create a role-specific account from the account directory', async ({ page }) => {
+    await adminLogin(page);
+    await page.getByRole('link', { name: /Accounts|Mga Account/ }).click();
+    await expect(
+      page.getByRole('heading', { name: /Account directory|Directory ng account/ }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: /Add account|Magdagdag ng account/ }).click();
+    const username = `e2e-cashier-${Date.now()}`;
+    const dialog = page.getByRole('dialog', { name: /Add account|Magdagdag ng account/ });
+    await dialog.getByLabel('Full name').fill('E2E Cashier');
+    await dialog.getByLabel('Username').fill(username);
+    await dialog.getByLabel('Role').selectOption('cashier');
+    await dialog.getByLabel('Email').fill(`${username}@example.com`);
+    await dialog.getByLabel('New password').fill('e2e-cashier-pass-123');
+    await dialog.getByLabel('Confirm password').fill('e2e-cashier-pass-123');
+    await dialog.getByRole('button', { name: /Create account|Gumawa ng account/ }).click();
+    const account = page.locator('.admin-account-card', { hasText: username });
+    await expect(account).toContainText(/Cashier/);
+    await expect(account).toContainText(/EMP-/);
+    await account.getByRole('button', { name: /Reset password|I-reset/ }).click();
+    const resetDialog = page.getByRole('dialog', { name: /Reset password|I-reset/ });
+    await resetDialog.getByLabel('New password').fill('e2e-cashier-pass-456');
+    await resetDialog.getByLabel('Confirm password').fill('e2e-cashier-pass-456');
+    await resetDialog
+      .getByRole('button', { name: /Reset account password|I-reset ang password/ })
+      .click();
+    await expect(account).toBeVisible();
   });
 });

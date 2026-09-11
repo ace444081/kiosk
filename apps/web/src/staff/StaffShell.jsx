@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, Outlet, useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { fetchStaffSession, getStaffStation, staffLogout } from '../services/admin-api.js';
 
 export function StaffShell() {
@@ -28,8 +28,16 @@ export function StaffShell() {
   if (!session) {
     return <Navigate to={`/staff/login?station=${encodeURIComponent(routeStation)}`} replace />;
   }
-  if (!['admin', 'staff'].includes(session.role)) {
+  if (!['admin', 'staff', 'cashier', 'kitchen', 'serving'].includes(session.role)) {
     return <Navigate to="/staff/login" replace />;
+  }
+  const roleStation = {
+    cashier: 'cashier',
+    kitchen: 'kitchen',
+    serving: 'serving',
+  }[session.role];
+  if (roleStation && routeSegment !== roleStation) {
+    return <Navigate to={`/staff/${roleStation}`} replace />;
   }
   const logout = async () => {
     await staffLogout(sessionStation);
@@ -39,6 +47,7 @@ export function StaffShell() {
 }
 
 export function StaffLauncher() {
+  const { session } = useOutletContext();
   const stations = [
     ['payment', 'Payment', 'Confirm cash before the order reaches preparation.'],
     ['preparation', 'Preparation', 'Prepare paid orders and track the timer.'],
@@ -47,7 +56,9 @@ export function StaffLauncher() {
   return (
     <main className="staff-launcher">
       <img src="/placeholders/logo.svg" alt="Sweet Gonz" />
-      <p className="station-eyebrow">One-person operations</p>
+      <p className="station-eyebrow">
+        {session?.role === 'staff' ? 'One-person operations' : 'Operations access'}
+      </p>
       <h1>Open the unified workboard</h1>
       <div>
         {stations.map(([key, title, text]) => (

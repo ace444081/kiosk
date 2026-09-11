@@ -1,6 +1,8 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
+import sharp from 'sharp';
 import {
   adminLoginSchema,
+  createAccountSchema,
   availabilityPatchSchema,
   catalogPatchSchema,
   auditLogQuerySchema,
@@ -11,8 +13,12 @@ import {
   paymentPatchSchema,
   publicationPatchSchema,
   reportQuerySchema,
+  resetAccountPasswordSchema,
   statusPatchSchema,
+  updateAccountSchema,
   BEVERAGE_CATEGORIES,
+  MAX_PRODUCT_IMAGE_BYTES,
+  MAX_PRODUCT_IMAGE_UPLOAD_BYTES,
   SUGAR_LEVEL_GROUP,
   getStockStatus,
 } from '@kiosk/shared';
@@ -34,6 +40,8 @@ import { AdminRepository } from '../repositories/admins.js';
 import { AuditRepository } from '../repositories/audit.js';
 import { EVENT_TYPES } from '../events/event-types.js';
 import { buildSoaSummary } from '../services/soa-report.js';
+import { randomId } from '../security/tokens.js';
+import { AdminAuthService } from '../services/admin-auth.js';
 
 function parseOrThrow(schema, data) {
   const parsed = schema.safeParse(data);
@@ -42,6 +50,43 @@ function parseOrThrow(schema, data) {
     throw badRequest(envelope.code, envelope.message, envelope.fieldErrors);
   }
   return parsed.data;
+}
+
+function serializeAccount(account) {
+  return {
+    id: account.id,
+    username: account.username,
+    fullName: account.full_name || account.username,
+    employeeId: account.employee_id || null,
+    email: account.email || null,
+    role: account.role,
+    isActive: account.is_active === 1 || account.is_active === true,
+    mustChangePassword: account.must_change_password === 1 || account.must_change_password === true,
+    lastLoginAt: account.last_login_at || null,
+    createdAt: account.created_at,
+    updatedAt: account.updated_at,
+    version: account.version || 1,
+  };
+}
+
+function imageMimeFromMagic(buffer) {
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return 'image/jpeg';
+  }
+  if (
+    buffer.length >= 8 &&
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).equals(buffer.subarray(0, 8))
+  ) {
+    return 'image/png';
+  }
+  if (
+    buffer.length >= 12 &&
+    buffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    buffer.subarray(8, 12).toString('ascii') === 'WEBP'
+  ) {
+    return 'image/webp';
+  }
+  return null;
 }
 
 function serializeProduct(product, categoryById) {
@@ -156,7 +201,6 @@ export function adminRoutes({
   audit: auditOverride,
 }) {
   const router = Router();
-  const admins = adminsOverride;
   const accountDirectory = adminsOverride || new AdminRepository(db);
   const catalog = catalogOverride || new CatalogRepository(db);
   const orders = ordersOverride || new OrderRepository(db);
@@ -202,12 +246,9 @@ export function adminRoutes({
           requestId: req.id,
         });
       }
-      const account = admins
-        ? await admins.findById(req.session.adminId)
-        : db
-            .prepare('SELECT username, role, is_active FROM admins WHERE id = ?')
-            .get(req.session.adminId);
-      if (!account || account.is_active !== 1) {
+      const account = await accountDirectory.findById(req.session.adminId);
+      const isActive = account?.is_active === 1 || account?.is_active === true;
+      if (!account || !isActive) {
         return res.status(401).json({
           error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
           requestId: req.id,
@@ -217,6 +258,10 @@ export function adminRoutes({
         authenticated: true,
         username: account.username,
         role: account.role,
+        fullName: account.full_name || account.username,
+        mustChangePassword:
+          account.must_change_password === 1 || account.must_change_password === true,
+        version: account.version || 1,
         csrfToken: req.session.csrfToken,
         expiresAt: new Date(req.session.absExpiresAt).toISOString(),
       });
@@ -241,7 +286,152 @@ export function adminRoutes({
   });
 
   // Everything below is the supervisory console and is admin-only.
-  router.use(requireAuth, resolveStaff(admins || db), requireRoles('admin'));
+  router.use(requireAuth, resolveStaff(accountDirectory), requireRoles('admin'));
+
+  // --- Account directory ---------------------------------------------------
+  // Account mutations stay behind the admin-only middleware above. Responses
+  // are deliberately sanitized so password hashes never leave the server.
+  router.get('/accounts', async (req, res, next) => {
+    try {
+      const accounts = await accountDirectory.listAll();
+      res.json({ accounts: accounts.map(serializeAccount) });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post('/accounts', requireCsrf, async (req, res, next) => {
+    try {
+      const input = parseOrThrow(createAccountSchema, req.body);
+      const existing = await accountDirectory.listAll();
+      const normalizedUsername = input.username.toLowerCase();
+      if (existing.some((account) => account.username.toLowerCase() === normalizedUsername)) {
+        throw conflict('ACCOUNT_USERNAME_EXISTS', 'That username is already in use');
+      }
+      if (
+        input.email &&
+        existing.some(
+          (account) => account.email && account.email.toLowerCase() === input.email.toLowerCase(),
+        )
+      ) {
+        throw conflict('ACCOUNT_EMAIL_EXISTS', 'That email is already in use');
+      }
+
+      const account = await accountDirectory.create({
+        id: randomId(),
+        username: input.username,
+        passwordHash: AdminAuthService.hashPassword(input.password),
+        role: input.role,
+        fullName: input.fullName,
+        employeeId: `EMP-${randomId().slice(0, 8).toUpperCase()}`,
+        email: input.email || null,
+        mustChangePassword: true,
+      });
+      const safeAccount = serializeAccount(account);
+      await audit.record({
+        actor: req.session.username,
+        actorRole: req.staff.role,
+        action: 'ACCOUNT_CREATED',
+        targetType: 'account',
+        targetId: safeAccount.id,
+        newState: safeAccount,
+        requestId: req.id,
+        ip: req.ip,
+        userAgent: req.get('User-Agent'),
+      });
+      res.status(201).json({ account: safeAccount });
+    } catch (err) {
+      if (err?.code === 'SQLITE_CONSTRAINT_UNIQUE' || err?.code === '23505') {
+        return next(conflict('ACCOUNT_EXISTS', 'An account with those details already exists'));
+      }
+      next(err);
+    }
+  });
+
+  router.patch('/accounts/:id', requireCsrf, async (req, res, next) => {
+    try {
+      const input = parseOrThrow(updateAccountSchema, req.body);
+      const current = await accountDirectory.findById(req.params.id);
+      if (!current) throw notFound('ACCOUNT_NOT_FOUND', 'Account not found');
+
+      const nextRole = input.role ?? current.role;
+      const nextActive = input.isActive ?? (current.is_active === 1 || current.is_active === true);
+      if (current.id === req.session.adminId && (nextRole !== 'admin' || !nextActive)) {
+        throw badRequest('SELF_LOCKOUT', 'You cannot deactivate or demote your own account');
+      }
+
+      const currentIsActiveAdmin =
+        current.role === 'admin' && (current.is_active === 1 || current.is_active === true);
+      const becomesInactiveAdmin = nextRole !== 'admin' || !nextActive;
+      if (
+        currentIsActiveAdmin &&
+        becomesInactiveAdmin &&
+        (await accountDirectory.countActiveAdmins()) <= 1
+      ) {
+        throw badRequest('LAST_ADMIN', 'Keep at least one active administrator account');
+      }
+
+      const updated = await accountDirectory.updateProfile(
+        req.params.id,
+        {
+          fullName: input.fullName,
+          role: input.role,
+          email: input.email,
+          isActive: input.isActive,
+        },
+        input.version,
+      );
+      if (!updated) throw conflict('STALE_VERSION', 'Account was changed by another action');
+      const safeAccount = serializeAccount(updated);
+      await audit.record({
+        actor: req.session.username,
+        actorRole: req.staff.role,
+        action: 'ACCOUNT_UPDATED',
+        targetType: 'account',
+        targetId: safeAccount.id,
+        previousState: serializeAccount(current),
+        newState: safeAccount,
+        requestId: req.id,
+        ip: req.ip,
+        userAgent: req.get('User-Agent'),
+      });
+      res.json({ account: safeAccount });
+    } catch (err) {
+      if (err?.code === 'SQLITE_CONSTRAINT_UNIQUE' || err?.code === '23505') {
+        return next(conflict('ACCOUNT_EMAIL_EXISTS', 'That email is already in use'));
+      }
+      next(err);
+    }
+  });
+
+  router.post('/accounts/:id/password', requireCsrf, async (req, res, next) => {
+    try {
+      const input = parseOrThrow(resetAccountPasswordSchema, req.body);
+      const current = await accountDirectory.findById(req.params.id);
+      if (!current) throw notFound('ACCOUNT_NOT_FOUND', 'Account not found');
+      const updated = await accountDirectory.resetPassword(
+        req.params.id,
+        AdminAuthService.hashPassword(input.password),
+        input.version,
+      );
+      if (!updated) throw conflict('STALE_VERSION', 'Account was changed by another action');
+      const safeAccount = serializeAccount(updated);
+      await audit.record({
+        actor: req.session.username,
+        actorRole: req.staff.role,
+        action: 'ACCOUNT_PASSWORD_RESET',
+        targetType: 'account',
+        targetId: safeAccount.id,
+        newState: { version: safeAccount.version, mustChangePassword: true },
+        requestId: req.id,
+        ip: req.ip,
+        userAgent: req.get('User-Agent'),
+      });
+      res.json({ account: safeAccount });
+    } catch (err) {
+      next(err);
+    }
+  });
 
   // --- Orders --------------------------------------------------------------
   router.get('/orders', async (req, res, next) => {
@@ -353,6 +543,112 @@ export function adminRoutes({
       next(err);
     }
   });
+
+  router.put(
+    '/products/:id/image',
+    express.raw({
+      type: ['image/jpeg', 'image/png', 'image/webp', 'application/octet-stream'],
+      limit: MAX_PRODUCT_IMAGE_UPLOAD_BYTES,
+    }),
+    requireCsrf,
+    async (req, res, next) => {
+      try {
+        const product = await catalog.findProductById(req.params.id);
+        if (!product) throw notFound('PRODUCT_NOT_FOUND', 'Product not found');
+        const expectedVersion = Number.parseInt(req.get('X-Product-Version') || '', 10);
+        if (!Number.isInteger(expectedVersion) || expectedVersion < 1) {
+          throw badRequest('IMAGE_VERSION_REQUIRED', 'The current product version is required');
+        }
+        if (product.version !== expectedVersion) {
+          const categoryById = new Map(
+            (await catalog.listCategories()).map((category) => [category.id, category]),
+          );
+          return res.status(409).json({
+            error: { code: 'STALE_VERSION', message: 'Product was modified by another action' },
+            product: serializeProduct(product, categoryById),
+            requestId: req.id,
+          });
+        }
+
+        const input = Buffer.isBuffer(req.body) ? req.body : null;
+        const detectedMime = input && imageMimeFromMagic(input);
+        if (!input?.length || !detectedMime) {
+          throw badRequest('INVALID_PRODUCT_IMAGE', 'Upload a valid JPEG, PNG, or WebP image');
+        }
+
+        let imageData;
+        let metadata;
+        try {
+          const image = sharp(input, { failOn: 'error' });
+          metadata = await image.metadata();
+          imageData = await image
+            .rotate()
+            .resize({ width: 1280, height: 960, fit: 'inside', withoutEnlargement: true })
+            .webp({ quality: 82, effort: 4 })
+            .toBuffer();
+        } catch {
+          throw badRequest('INVALID_PRODUCT_IMAGE', 'Upload a valid JPEG, PNG, or WebP image');
+        }
+        if (!imageData.length || imageData.length > MAX_PRODUCT_IMAGE_BYTES) {
+          throw badRequest('PRODUCT_IMAGE_TOO_LARGE', 'The processed image is still too large');
+        }
+
+        const updated = await catalog.updateProductImage(
+          product.id,
+          {
+            mimeType: 'image/webp',
+            imageData,
+            byteSize: imageData.length,
+            width: metadata.width || null,
+            height: metadata.height || null,
+          },
+          expectedVersion,
+        );
+        if (!updated) throw conflict('STALE_VERSION', 'Product was modified by another action');
+
+        await audit.record({
+          actor: req.session.username,
+          action: 'PRODUCT_IMAGE_UPDATED',
+          targetType: 'product',
+          targetId: updated.id,
+          previousState: {
+            imagePath: product.image_path,
+            version: product.version,
+          },
+          newState: {
+            imagePath: updated.image_path,
+            mimeType: 'image/webp',
+            sourceMimeType: detectedMime,
+            byteSize: imageData.length,
+            width: metadata.width || null,
+            height: metadata.height || null,
+            version: updated.version,
+          },
+          requestId: req.id,
+          ip: req.ip,
+          userAgent: req.get('User-Agent'),
+        });
+        eventBus.publish({
+          type: EVENT_TYPES.CATALOG_CHANGED,
+          data: { productId: updated.id, action: 'image_updated', version: updated.version },
+        });
+        const categoryById = new Map(
+          (await catalog.listCategories()).map((category) => [category.id, category]),
+        );
+        res.json({
+          product: serializeProduct(updated, categoryById),
+          image: {
+            mimeType: 'image/webp',
+            byteSize: imageData.length,
+            width: metadata.width || null,
+            height: metadata.height || null,
+          },
+        });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
 
   router.patch('/products/:id', requireAuth, requireCsrf, async (req, res, next) => {
     try {

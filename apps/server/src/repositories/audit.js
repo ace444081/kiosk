@@ -1,5 +1,11 @@
 import { randomId } from '../security/tokens.js';
 
+function normalizeAuditRole(role) {
+  if (!role) return null;
+  if (['admin', 'kiosk', 'system'].includes(role)) return role;
+  return 'staff';
+}
+
 export class AuditRepository {
   constructor(db) {
     this.db = db;
@@ -26,7 +32,7 @@ export class AuditRepository {
       .run(
         randomId(),
         actor,
-        actorRole || null,
+        normalizeAuditRole(actorRole),
         action,
         targetType || null,
         targetId || null,

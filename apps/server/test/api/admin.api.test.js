@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import ExcelJS from 'exceljs';
+import sharp from 'sharp';
 import request from 'supertest';
 import http from 'node:http';
 import { makeTestApp, createTestAdmin, loginAgent, cashOrderPayload } from '../utils.js';
@@ -572,6 +573,139 @@ describe('admin API - auth, CSRF, rate limiting, workflow, summary', () => {
           }),
         ]),
       );
+    });
+  });
+
+  describe('account directory and product photos', () => {
+    it('creates, edits, and resets role-scoped accounts without exposing secrets', async () => {
+      const { agent, csrfToken } = await loginAgent(ctx.app, {
+        username: 'boss',
+        password: 'boss-pass-123',
+      });
+      const created = await agent
+        .post('/api/v1/admin/accounts')
+        .set('X-CSRF-Token', csrfToken)
+        .send({
+          fullName: 'Kitchen Lead',
+          username: 'kitchen-lead',
+          role: 'kitchen',
+          email: 'kitchen@example.com',
+          password: 'kitchen-pass-123',
+          passwordConfirmation: 'kitchen-pass-123',
+        });
+      expect(created.status).toBe(201);
+      expect(created.body.account).toEqual(
+        expect.objectContaining({
+          username: 'kitchen-lead',
+          role: 'kitchen',
+          fullName: 'Kitchen Lead',
+          mustChangePassword: true,
+          employeeId: expect.stringMatching(/^EMP-[A-Z0-9]{8}$/),
+        }),
+      );
+      expect(JSON.stringify(created.body)).not.toContain('password_hash');
+
+      const duplicate = await agent
+        .post('/api/v1/admin/accounts')
+        .set('X-CSRF-Token', csrfToken)
+        .send({
+          fullName: 'Duplicate',
+          username: 'KITCHEN-LEAD',
+          role: 'staff',
+          password: 'duplicate-pass-123',
+          passwordConfirmation: 'duplicate-pass-123',
+        });
+      expect(duplicate.status).toBe(409);
+      expect(duplicate.body.error.code).toBe('ACCOUNT_USERNAME_EXISTS');
+
+      const account = created.body.account;
+      const updated = await agent
+        .patch(`/api/v1/admin/accounts/${account.id}`)
+        .set('X-CSRF-Token', csrfToken)
+        .send({
+          version: account.version,
+          fullName: 'Kitchen Supervisor',
+          role: 'kitchen',
+          email: 'kitchen@example.com',
+          isActive: true,
+        });
+      expect(updated.status).toBe(200);
+      expect(updated.body.account.fullName).toBe('Kitchen Supervisor');
+      expect(updated.body.account.version).toBe(account.version + 1);
+
+      const reset = await agent
+        .post(`/api/v1/admin/accounts/${account.id}/password`)
+        .set('X-CSRF-Token', csrfToken)
+        .send({
+          version: updated.body.account.version,
+          password: 'new-kitchen-pass-123',
+          passwordConfirmation: 'new-kitchen-pass-123',
+        });
+      expect(reset.status).toBe(200);
+      expect(reset.body.account.mustChangePassword).toBe(true);
+
+      const staffAgent = request.agent(ctx.app);
+      const staffLogin = await staffAgent
+        .post('/api/v1/staff/session')
+        .set('X-Staff-Station', 'kitchen')
+        .send({ username: 'kitchen-lead', password: 'new-kitchen-pass-123' });
+      expect(staffLogin.status).toBe(200);
+      expect(staffLogin.body.role).toBe('kitchen');
+      const board = await staffAgent
+        .get('/api/v1/staff/workboard')
+        .set('X-Staff-Station', 'kitchen');
+      expect(board.status).toBe(200);
+      expect(board.body.preparation).toBeTruthy();
+      expect(board.body.payment).toBeUndefined();
+      const forbiddenQueue = await staffAgent
+        .get('/api/v1/staff/queue/cashier')
+        .set('X-Staff-Station', 'kitchen');
+      expect(forbiddenQueue.status).toBe(403);
+    });
+
+    it('stores validated product uploads as versioned public WebP images', async () => {
+      const { agent, csrfToken } = await loginAgent(ctx.app, {
+        username: 'boss',
+        password: 'boss-pass-123',
+      });
+      const png = await sharp({
+        create: { width: 4, height: 3, channels: 3, background: { r: 210, g: 120, b: 60 } },
+      })
+        .png()
+        .toBuffer();
+      const uploaded = await agent
+        .put('/api/v1/admin/products/americano/image')
+        .set('X-CSRF-Token', csrfToken)
+        .set('X-Product-Version', '1')
+        .set('Content-Type', 'image/png')
+        .send(png);
+      expect(uploaded.status).toBe(200);
+      expect(uploaded.body.product.imagePath).toBe('/api/v1/products/americano/image?v=2');
+      expect(uploaded.body.image.mimeType).toBe('image/webp');
+
+      const publicImage = await request(ctx.app).get('/api/v1/products/americano/image');
+      expect(publicImage.status).toBe(200);
+      expect(publicImage.headers['content-type']).toContain('image/webp');
+      expect(publicImage.body.length).toBeGreaterThan(0);
+      expect(publicImage.headers['cache-control']).toContain('immutable');
+
+      const stale = await agent
+        .put('/api/v1/admin/products/americano/image')
+        .set('X-CSRF-Token', csrfToken)
+        .set('X-Product-Version', '1')
+        .set('Content-Type', 'image/png')
+        .send(png);
+      expect(stale.status).toBe(409);
+      expect(stale.body.error.code).toBe('STALE_VERSION');
+
+      const invalid = await agent
+        .put('/api/v1/admin/products/americano/image')
+        .set('X-CSRF-Token', csrfToken)
+        .set('X-Product-Version', '2')
+        .set('Content-Type', 'image/png')
+        .send(Buffer.from('not-an-image'));
+      expect(invalid.status).toBe(400);
+      expect(invalid.body.error.code).toBe('INVALID_PRODUCT_IMAGE');
     });
   });
 

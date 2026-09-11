@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { adminLoginSchema, paymentPatchSchema, statusPatchSchema } from '@kiosk/shared';
 import { zodErrorToEnvelope } from '../middleware/errors.js';
-import { badRequest, conflict } from '../utils/app-error.js';
+import { badRequest, conflict, forbidden } from '../utils/app-error.js';
 import {
   noStore,
   requireAuth,
@@ -10,8 +10,37 @@ import {
   resolveStaff,
 } from '../middleware/auth.js';
 import { OrderRepository } from '../repositories/orders.js';
+import { AdminRepository } from '../repositories/admins.js';
 
 const STATIONS = ['cashier', 'kitchen', 'serving'];
+const LANES = [
+  ['payment', 'cashier'],
+  ['preparation', 'kitchen'],
+  ['handoff', 'serving'],
+];
+const ROLE_LANES = {
+  cashier: new Set(['payment']),
+  kitchen: new Set(['preparation']),
+  serving: new Set(['handoff']),
+};
+const OPERATION_ROLES = ['admin', 'staff', 'cashier', 'kitchen', 'serving'];
+
+function lanesForRole(role) {
+  const allowed = ROLE_LANES[role];
+  return allowed ? LANES.filter(([lane]) => allowed.has(lane)) : LANES;
+}
+
+function ensureStationAccess(role, station) {
+  const allowed = ROLE_LANES[role];
+  if (
+    allowed &&
+    !allowed.has(
+      station === 'cashier' ? 'payment' : station === 'kitchen' ? 'preparation' : 'handoff',
+    )
+  ) {
+    throw forbidden('STATION_FORBIDDEN', 'Your role is assigned to a different station');
+  }
+}
 
 function parse(schema, value) {
   const result = schema.safeParse(value);
@@ -26,7 +55,10 @@ function sessionPayload(req, account) {
   return {
     authenticated: true,
     username: account.username,
+    fullName: account.full_name || account.username,
     role: account.role,
+    mustChangePassword: account.must_change_password === 1 || account.must_change_password === true,
+    version: account.version || 1,
     csrfToken: req.session.csrfToken,
     expiresAt: new Date(req.session.absExpiresAt).toISOString(),
   };
@@ -70,6 +102,7 @@ export function staffRoutes({
 }) {
   const router = Router();
   const orders = ordersOverride || new OrderRepository(db);
+  const accounts = adminsOverride || new AdminRepository(db);
   router.use(noStore);
 
   router.post('/session', loginLimit.middleware, async (req, res, next) => {
@@ -93,7 +126,7 @@ export function staffRoutes({
     }
   });
 
-  router.get('/session', requireAuth, resolveStaff(adminsOverride || db), (req, res) => {
+  router.get('/session', requireAuth, resolveStaff(accounts), (req, res) => {
     res.json(sessionPayload(req, req.staff));
   });
 
@@ -113,16 +146,12 @@ export function staffRoutes({
     }
   });
 
-  router.use(requireAuth, resolveStaff(adminsOverride || db));
+  router.use(requireAuth, resolveStaff(accounts));
 
-  router.get('/workboard', async (req, res, next) => {
+  router.get('/workboard', requireRoles(...OPERATION_ROLES), async (req, res, next) => {
     try {
       const page = Math.max(1, Number.parseInt(req.query.page || '1', 10) || 1);
-      const lanes = [
-        ['payment', 'cashier'],
-        ['preparation', 'kitchen'],
-        ['handoff', 'serving'],
-      ];
+      const lanes = lanesForRole(req.staff.role);
       const queues = await Promise.all(
         lanes.map(async ([lane, station]) => [
           lane,
@@ -161,6 +190,7 @@ export function staffRoutes({
     try {
       const { station } = req.params;
       if (!STATIONS.includes(station)) throw badRequest('INVALID_STATION', 'Unknown station');
+      ensureStationAccess(req.staff.role, station);
       const page = Math.max(1, Number.parseInt(req.query.page || '1', 10) || 1);
       const queue = await orders.listStationQueue(station, { page, pageSize: 20 });
       const details = orders.detailMany
@@ -186,7 +216,7 @@ export function staffRoutes({
 
   router.patch(
     '/orders/:id/payment',
-    requireRoles('admin', 'staff'),
+    requireRoles('admin', 'staff', 'cashier'),
     requireCsrf,
     async (req, res, next) => {
       try {
@@ -212,11 +242,20 @@ export function staffRoutes({
 
   router.patch(
     '/orders/:id/status',
-    requireRoles('admin', 'staff'),
+    requireRoles('admin', 'staff', 'kitchen', 'serving'),
     requireCsrf,
     async (req, res, next) => {
       try {
         const input = parse(statusPatchSchema, req.body);
+        if (req.staff.role === 'kitchen' && !['preparing', 'ready'].includes(input.status)) {
+          throw forbidden(
+            'STATION_FORBIDDEN',
+            'Kitchen accounts can only update preparation steps',
+          );
+        }
+        if (req.staff.role === 'serving' && input.status !== 'completed') {
+          throw forbidden('STATION_FORBIDDEN', 'Serving accounts can only complete ready orders');
+        }
         const updated = await orderService.changeStatus({
           orderId: req.params.id,
           newStatus: input.status,

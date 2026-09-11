@@ -4,7 +4,10 @@
 
 export const BUSINESS_TIMEZONE = 'Asia/Manila';
 
-export const ACCOUNT_ROLES = ['admin', 'staff'];
+// `staff` remains the unified operator role. The station roles are narrower
+// profiles managed by an administrator and enforced by the staff API.
+export const ACCOUNT_ROLES = ['admin', 'staff', 'cashier', 'kitchen', 'serving'];
+export const STAFF_ACCOUNT_ROLES = ['staff', 'cashier', 'kitchen', 'serving'];
 export const STAFF_STATIONS = ['cashier', 'kitchen', 'serving'];
 
 export const ORDER_STATUSES = ['placed', 'preparing', 'ready', 'completed', 'cancelled'];
@@ -62,6 +65,8 @@ export const SSE_MAX_BACKLOG = 200;
 export const DEMO_REFERENCE_PREFIX = 'DEMO-';
 
 export const MAX_JSON_BODY_BYTES = 100 * 1024; // request-size limit
+export const MAX_PRODUCT_IMAGE_UPLOAD_BYTES = 5 * 1024 * 1024;
+export const MAX_PRODUCT_IMAGE_BYTES = 600 * 1024;
 
 /**
  * Allowed preparation-status transitions.

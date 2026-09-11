@@ -21,8 +21,17 @@ export function resolveStaff(source) {
             .get(req.session.adminId),
     )
       .then((account) => {
-        if (!account || account.is_active !== 1) {
+        const isActive = account?.is_active === 1 || account?.is_active === true;
+        if (!account || !isActive) {
           return next(unauthorized('UNAUTHORIZED', 'Authentication required'));
+        }
+        const currentVersion = account.version || 1;
+        if (req.session.accountVersion && req.session.accountVersion !== currentVersion) {
+          return next(unauthorized('SESSION_REVOKED', 'Session must be renewed'));
+        }
+        if (!req.session.accountVersion) {
+          req.session.accountVersion = currentVersion;
+          req.session.save?.(() => {});
         }
         req.staff = { ...account, role: normalizeAccountRole(account.role) };
         req.session.username = account.username;

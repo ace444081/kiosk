@@ -4,9 +4,9 @@ import { AuditRepository } from '../repositories/audit.js';
 import { generateToken, timingSafeEqualString } from '../security/tokens.js';
 import { unauthorized } from '../utils/app-error.js';
 
-/** Normalize legacy station-specific accounts into the unified staff role. */
+/** Normalize legacy or unknown roles without granting broader access. */
 export function normalizeAccountRole(role) {
-  return role === 'admin' ? 'admin' : 'staff';
+  return ['admin', 'staff', 'cashier', 'kitchen', 'serving'].includes(role) ? role : 'staff';
 }
 
 /**
@@ -111,10 +111,12 @@ export class AdminAuthService {
       ip,
       userAgent,
     });
+    await this.admins.touchLastLogin?.(admin.id);
     return {
       adminId: admin.id,
       username: admin.username,
       role: normalizeAccountRole(admin.role),
+      version: admin.version || 1,
     };
   }
 
@@ -126,6 +128,7 @@ export class AdminAuthService {
         req.session.adminId = admin.adminId;
         req.session.username = admin.username;
         req.session.role = normalizeAccountRole(admin.role);
+        req.session.accountVersion = admin.version || 1;
         req.session.csrfToken = generateToken(32);
         req.session.absExpiresAt = Date.now() + 8 * 60 * 60 * 1000;
         req.session.save((saveErr) => (saveErr ? reject(saveErr) : resolve()));

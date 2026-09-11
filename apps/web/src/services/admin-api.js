@@ -91,6 +91,42 @@ export async function adminPost(path, body) {
   return api.post(path, body, { csrfToken: getCsrfToken() });
 }
 
+/** Upload a product photo as a binary request with optimistic versioning. */
+export async function adminUploadImage(path, file, version) {
+  let response;
+  try {
+    response = await fetch(`/api/v1${path}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': file.type || 'application/octet-stream',
+        'X-CSRF-Token': getCsrfToken() || '',
+        'X-Product-Version': String(version),
+      },
+      body: file,
+      credentials: 'same-origin',
+    });
+  } catch {
+    throw new ApiError({ code: 'NETWORK_ERROR', message: 'Cannot reach the server', status: 0 });
+  }
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+  if (!response.ok) {
+    throw new ApiError({
+      code: payload?.error?.code || 'GENERIC',
+      message: payload?.error?.message || `Request failed (${response.status})`,
+      fieldErrors: payload?.error?.fieldErrors,
+      status: response.status,
+      requestId: payload?.requestId,
+      product: payload?.product,
+    });
+  }
+  return payload;
+}
+
 /** Download an authenticated admin export while preserving the shared error format. */
 export async function adminDownload(path) {
   let response;

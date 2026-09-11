@@ -1,8 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BEVERAGE_CATEGORIES, formatPeso, SUGAR_LEVEL_GROUP } from '@kiosk/shared';
-import { adminPatch, adminPost } from '../services/admin-api.js';
-import { generatedImageForSku } from '../data/product-image-library.js';
+import { adminPatch, adminPost, adminUploadImage } from '../services/admin-api.js';
 
 const initialForm = {
   sku: '',
@@ -96,13 +95,23 @@ export function AdminProductFormDialog({
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [productVersion, setProductVersion] = useState(product?.version || 1);
 
   const productState = useMemo(() => {
     if (form.publication === 'available') return { isPublished: true, isAvailable: true };
     if (form.publication === 'unavailable') return { isPublished: true, isAvailable: false };
     return { isPublished: false, isAvailable: false };
   }, [form.publication]);
-  const generatedImage = generatedImageForSku(form.sku);
+  useEffect(
+    () => () => {
+      if (imagePreview && globalThis.URL?.revokeObjectURL) {
+        globalThis.URL.revokeObjectURL(imagePreview);
+      }
+    },
+    [imagePreview],
+  );
 
   const update = (key, value) => setForm((previous) => ({ ...previous, [key]: value }));
   const updateCategory = (categoryId) => {
@@ -149,6 +158,28 @@ export function AdminProductFormDialog({
     }));
   };
 
+  const chooseImage = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    setImageFailed(false);
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setError(t('admin.photoTypeError'));
+      event.target.value = '';
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError(t('admin.photoSizeError'));
+      event.target.value = '';
+      return;
+    }
+    if (imagePreview && globalThis.URL?.revokeObjectURL) {
+      globalThis.URL.revokeObjectURL(imagePreview);
+    }
+    setImageFile(file);
+    setImagePreview(globalThis.URL?.createObjectURL ? globalThis.URL.createObjectURL(file) : null);
+  };
+
   const save = async (event) => {
     event.preventDefault();
     setBusy(true);
@@ -160,7 +191,7 @@ export function AdminProductFormDialog({
         descriptionEn: form.descriptionEn.trim(),
         descriptionFil: form.descriptionFil.trim(),
         priceCentavos: centsFromPeso(form.price),
-        imagePath: form.imagePath.trim(),
+        imagePath: form.imagePath.trim() || '/placeholders/logo.svg',
         sortOrder: Number.parseInt(form.sortOrder || '0', 10),
         ...productState,
         stockQuantity: form.stockQuantity === '' ? null : Number.parseInt(form.stockQuantity, 10),
@@ -179,14 +210,44 @@ export function AdminProductFormDialog({
           })),
         })),
       };
-      const payload = product
-        ? await adminPatch(`/admin/products/${product.id}`, {
-            ...editorPayload,
-            version: product.version,
-          })
-        : await adminPost('/admin/products', { sku: form.sku.trim(), ...editorPayload });
-      if (product) onUpdated(payload.product);
-      else onCreated(payload.product);
+      let savedProduct;
+      if (product) {
+        let version = productVersion;
+        let imagePath = editorPayload.imagePath;
+        if (imageFile) {
+          const imagePayload = await adminUploadImage(
+            `/admin/products/${product.id}/image`,
+            imageFile,
+            version,
+          );
+          savedProduct = imagePayload.product;
+          version = savedProduct.version;
+          imagePath = savedProduct.imagePath;
+          setProductVersion(version);
+        }
+        const payload = await adminPatch(`/admin/products/${product.id}`, {
+          ...editorPayload,
+          imagePath,
+          version,
+        });
+        savedProduct = payload.product;
+        onUpdated(savedProduct);
+      } else {
+        const created = await adminPost('/admin/products', {
+          sku: form.sku.trim(),
+          ...editorPayload,
+        });
+        savedProduct = created.product;
+        if (imageFile) {
+          const imagePayload = await adminUploadImage(
+            `/admin/products/${savedProduct.id}/image`,
+            imageFile,
+            savedProduct.version,
+          );
+          savedProduct = imagePayload.product;
+        }
+        onCreated(savedProduct);
+      }
     } catch (err) {
       setError(
         err.message || (product ? t('admin.productUpdateError') : t('admin.productCreateError')),
@@ -304,7 +365,6 @@ export function AdminProductFormDialog({
               <label className="admin-form-span">
                 {t('admin.imageSource')}
                 <input
-                  required
                   type="text"
                   placeholder="/images/menu-item.jpg or https://..."
                   value={form.imagePath}
@@ -315,6 +375,21 @@ export function AdminProductFormDialog({
                 />
                 <span className="field-hint">{t('admin.imageSourceHint')}</span>
               </label>
+              <div className="admin-image-upload admin-form-span">
+                <label htmlFor="product-photo-upload">{t('admin.productPhoto')}</label>
+                <div className="admin-image-upload-control">
+                  <input
+                    id="product-photo-upload"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={chooseImage}
+                    disabled={busy}
+                  />
+                  <span className="field-hint">
+                    {imageFile ? imageFile.name : t('admin.choosePhotoHint')}
+                  </span>
+                </div>
+              </div>
               <label>
                 {t('admin.descriptionEn')}
                 <textarea
@@ -334,28 +409,13 @@ export function AdminProductFormDialog({
                 />
               </label>
             </div>
-            {generatedImage && (
-              <div className="image-library">
-                <p className="image-library-heading">{t('admin.generatedImage')}</p>
-                <button
-                  type="button"
-                  className={`image-library-option ${form.imagePath === generatedImage ? 'is-selected' : ''}`}
-                  onClick={() => {
-                    setImageFailed(false);
-                    update('imagePath', generatedImage);
-                  }}
-                  disabled={busy}
-                  aria-pressed={form.imagePath === generatedImage}
-                >
-                  <img src={generatedImage} alt="" />
-                  <span>{t('admin.useGeneratedImage')}</span>
-                </button>
-                <span className="field-hint">{t('admin.imageLibraryHint')}</span>
-              </div>
-            )}
             <div className="product-preview" aria-live="polite">
-              {form.imagePath && !imageFailed ? (
-                <img src={form.imagePath} alt="" onError={() => setImageFailed(true)} />
+              {(imagePreview || form.imagePath) && !imageFailed ? (
+                <img
+                  src={imagePreview || form.imagePath}
+                  alt=""
+                  onError={() => setImageFailed(true)}
+                />
               ) : (
                 <div className="product-preview-placeholder">{t('admin.imagePreview')}</div>
               )}

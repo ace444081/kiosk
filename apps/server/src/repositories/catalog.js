@@ -135,6 +135,52 @@ export class CatalogRepository {
     return result.changes ? this.findProductById(productId) : null;
   }
 
+  getProductImage(productId) {
+    return (
+      this.db
+        .prepare(
+          `SELECT product_id, mime_type, image_data, byte_size, width, height, updated_at
+           FROM product_images WHERE product_id = ?`,
+        )
+        .get(productId) || null
+    );
+  }
+
+  updateProductImage(
+    productId,
+    { mimeType, imageData, byteSize, width = null, height = null },
+    expectedVersion,
+  ) {
+    const update = this.db.transaction(() => {
+      const nextVersion = expectedVersion + 1;
+      const imagePath = `/api/v1/products/${productId}/image?v=${nextVersion}`;
+      const result = this.db
+        .prepare(
+          `UPDATE products SET image_path = ?, version = version + 1,
+             updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+           WHERE id = ? AND version = ?`,
+        )
+        .run(imagePath, productId, expectedVersion);
+      if (!result.changes) return null;
+      this.db
+        .prepare(
+          `INSERT INTO product_images
+             (product_id, mime_type, image_data, byte_size, width, height)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(product_id) DO UPDATE SET
+             mime_type = excluded.mime_type,
+             image_data = excluded.image_data,
+             byte_size = excluded.byte_size,
+             width = excluded.width,
+             height = excluded.height,
+             updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')`,
+        )
+        .run(productId, mimeType, imageData, byteSize, width, height);
+      return this.findProductById(productId);
+    });
+    return update();
+  }
+
   updateProduct(productId, product, expectedVersion) {
     const update = this.db.transaction((input) => {
       const result = this.db

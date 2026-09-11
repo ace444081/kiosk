@@ -3,6 +3,12 @@ import { LOW_STOCK_THRESHOLD } from '@kiosk/shared';
 
 const bool = (value) => (value ? 1 : 0);
 
+function normalizeAuditRole(role) {
+  if (!role) return null;
+  if (['admin', 'kiosk', 'system'].includes(role)) return role;
+  return 'staff';
+}
+
 function normalizeCatalog(row) {
   if (!row) return null;
   return { ...row, is_available: bool(row.is_available), is_published: bool(row.is_published) };
@@ -10,7 +16,11 @@ function normalizeCatalog(row) {
 
 function normalizeAdmin(row) {
   if (!row) return null;
-  return { ...row, is_active: bool(row.is_active) };
+  return {
+    ...row,
+    is_active: bool(row.is_active),
+    must_change_password: bool(row.must_change_password),
+  };
 }
 
 export class PgAdminRepository {
@@ -34,17 +44,77 @@ export class PgAdminRepository {
     return (
       await this.db.many(
         `SELECT id, username, role, is_active
-       FROM admins WHERE role = 'staff' ORDER BY LOWER(username)`,
+       FROM admins WHERE role <> 'admin' ORDER BY LOWER(username)`,
       )
     ).map(normalizeAdmin);
   }
 
-  async create({ id, username, passwordHash, role = 'admin' }) {
+  async listAll() {
+    return (
+      await this.db.many(`SELECT * FROM admins ORDER BY LOWER(full_name), LOWER(username)`)
+    ).map(normalizeAdmin);
+  }
+
+  async countActiveAdmins() {
+    const row = await this.db.one(
+      "SELECT COUNT(*)::int AS n FROM admins WHERE role = 'admin' AND is_active = TRUE",
+    );
+    return row.n;
+  }
+
+  async create({
+    id,
+    username,
+    passwordHash,
+    role = 'admin',
+    fullName = username,
+    employeeId = null,
+    email = null,
+    mustChangePassword = false,
+  }) {
     await this.db.query(
-      'INSERT INTO admins (id, username, password_hash, role) VALUES ($1, $2, $3, $4)',
-      [id, username, passwordHash, role],
+      `INSERT INTO admins
+        (id, username, password_hash, role, full_name, employee_id, email, must_change_password)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [id, username, passwordHash, role, fullName, employeeId, email, mustChangePassword],
     );
     return this.findById(id);
+  }
+
+  async updateProfile(id, { fullName, role, email, isActive }, expectedVersion) {
+    const values = [id, expectedVersion];
+    const assignments = [];
+    const add = (column, value) => {
+      values.push(value);
+      assignments.push(`${column} = $${values.length}`);
+    };
+    if (fullName !== undefined) add('full_name', fullName);
+    if (role !== undefined) add('role', role);
+    if (email !== undefined) add('email', email);
+    if (isActive !== undefined) add('is_active', isActive);
+    if (!assignments.length) return this.findById(id);
+    assignments.push('version = version + 1', 'updated_at = CURRENT_TIMESTAMP');
+    const row = await this.db.one(
+      `UPDATE admins SET ${assignments.join(', ')}
+       WHERE id = $1 AND version = $2 RETURNING *`,
+      values,
+    );
+    return normalizeAdmin(row);
+  }
+
+  async resetPassword(id, passwordHash, expectedVersion) {
+    return normalizeAdmin(
+      await this.db.one(
+        `UPDATE admins SET password_hash = $1, must_change_password = TRUE,
+           version = version + 1, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2 AND version = $3 RETURNING *`,
+        [passwordHash, id, expectedVersion],
+      ),
+    );
+  }
+
+  async touchLastLogin(id) {
+    await this.db.query('UPDATE admins SET last_login_at = CURRENT_TIMESTAMP WHERE id = $1', [id]);
   }
 
   async count() {
@@ -79,7 +149,7 @@ export class PgAuditRepository {
       [
         randomId(),
         actor,
-        actorRole || null,
+        normalizeAuditRole(actorRole),
         action,
         targetType || null,
         targetId || null,
@@ -290,6 +360,49 @@ export class PgCatalogRepository {
          WHERE id = $3 AND version = $4 RETURNING *`,
         [imagePath, stockQuantity, productId, expectedVersion],
       ),
+    );
+  }
+
+  async getProductImage(productId) {
+    return this.db.one(
+      `SELECT product_id, mime_type, image_data, byte_size, width, height, updated_at
+       FROM product_images WHERE product_id = $1`,
+      [productId],
+    );
+  }
+
+  async updateProductImage(
+    productId,
+    { mimeType, imageData, byteSize, width = null, height = null },
+    expectedVersion,
+  ) {
+    return normalizeCatalog(
+      await this.db.transaction(async (tx) => {
+        const row = await tx.one(
+          `UPDATE products
+           SET image_path = '/api/v1/products/' || $1 || '/image?v=' || (version + 1),
+               version = version + 1,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $1 AND version = $2
+           RETURNING *`,
+          [productId, expectedVersion],
+        );
+        if (!row) return null;
+        await tx.query(
+          `INSERT INTO product_images
+             (product_id, mime_type, image_data, byte_size, width, height)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (product_id) DO UPDATE SET
+             mime_type = EXCLUDED.mime_type,
+             image_data = EXCLUDED.image_data,
+             byte_size = EXCLUDED.byte_size,
+             width = EXCLUDED.width,
+             height = EXCLUDED.height,
+             updated_at = CURRENT_TIMESTAMP`,
+          [productId, mimeType, imageData, byteSize, width, height],
+        );
+        return row;
+      }),
     );
   }
 
